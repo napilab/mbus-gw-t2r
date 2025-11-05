@@ -99,6 +99,26 @@ root@devuan4-sysman:/sysman/Works/cc2531-sniffer/build#
 ```
 
 
+### Memories for Lab
+
+```
+FCC-3308 AMVDK15:
+modpoll -0 -b 9600 -p none -m rtu -a 1 -t 1 -r 1  /dev/ttyUSB0
+FCC-3308 GT-TH-01:
+modpoll -0 -b 9600 -p none -m rtu -a 9  -r 1 /dev/ttyUSB0
+FCC-3308 isp-con isn-101:
+modpoll -0 -b 9600 -p none -m rtu  -a 96  -t 3  -r 5 /dev/ttyS1
+FCC-3308:
+modpoll -0 -b 9600 -p none -m rtu -a 2 -t 3 -r 514 /dev/ttyS1 #PM-3112-160 джамперы 1000000110
+
+
+modpoll -0 -m tcp -a 1 -t 1 -r 1 -p 502	 127.0.0.1	#/dev/ttyUSB0 #TCP:0.0.0.0:502
+modpoll -0 -m tcp -a 9      -r 1 -p 502	 127.0.0.1	#/dev/ttyUSB0 #TCP:0.0.0.0:502
+modpoll -0 -p 503 -m tcp  -a 96  -t 3  -r 5 127.0.0.1 #/dev/ttyS1
+modpoll -0 -m tcp -a 2   -t 3  -r 514  -p 503 127.0.0.1 #/dev/ttyS1
+```
+
+
 
 
 ## Links & References

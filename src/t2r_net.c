@@ -313,6 +313,8 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 			case T2R$K_STATE_PDU_XMIT:
 
+				$MBAP_PRINT("Sending", l_netbuf_dsc.data, l_netbuf_dsc.len);
+
 				if ( l_session->datalen == l_netbuf_dsc.len )	/* All data is sent to remote TCP client ? */
 					{
 					$MBAP_PRINT("Sent", l_netbuf_dsc.data, l_netbuf_dsc.len);

@@ -134,7 +134,7 @@ void	t2r$mbap_print (
 		const char	*a__fi,
 		const int	a__li,
 		const char	*a_pref,
-		const void	*a_data,
+		const char	a_data[],
 			int	a_datalen
 		)
 {
@@ -146,7 +146,7 @@ char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
 	l_txid  = ntohs(l_mbap->txid);
 	l_proto =  ntohs(l_mbap->proto);
 	l_len =  ntohs(l_mbap->len);
-	l_pdu = (MODBUS_PDU_T *) &l_mbap->unit;
+	l_pdu = (MODBUS_PDU_T *) l_mbap->unit;
 
 	__util$bin2hex (l_pdu, l_buf, l_len);
 

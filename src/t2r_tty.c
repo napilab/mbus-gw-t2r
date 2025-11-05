@@ -685,7 +685,7 @@ uint16_t	*l_valptr;
 	l_req_pdu = (MODBUS_REQ_T *) l_req_dsc->data;
 	l_resp_pdu = (MODBUS_RESP_T *) l_resp_dsc->data;
 
-	l_nr_regs = l_req_pdu->qty;
+	l_nr_regs = ntohs(l_req_pdu->qty);
 
 	if ( (l_nr_regs < 4) || (l_nr_regs > (4 + 4 + 1) ))
 	     return	STS$K_ERROR;
@@ -694,6 +694,7 @@ uint16_t	*l_valptr;
 	l_resp_dsc->len = MODBUS$SZ_PDUHDR;						/* Preset PDU length */
 	l_resp_pdu->slave = l_req_pdu->slave;						/* Copy Slave and Function code from original request */
 	l_resp_pdu->fncode = l_req_pdu->fncode;
+	l_resp_pdu->bc = 0;
 
 	l_valptr = l_resp_pdu->val;							/* Set <l_valptr> to PDU's data part */
 
@@ -709,6 +710,7 @@ uint16_t	*l_valptr;
 		l_valptr = la_put_be16(l_valptr, (l_now.tv_sec & 0xffFF) );		/* R3 */
 
 		l_resp_dsc->len += (4 * 2);						/* Adjust size of data to 4xbe16 */
+		l_resp_pdu->bc += (4 * 2);
 		}
 
 	if (  l_nr_regs >= (4 + 4) )
@@ -720,6 +722,7 @@ uint16_t	*l_valptr;
 		l_valptr = la_put_be16(l_valptr, (l_now.tv_nsec & 0xffFF) );		/* R7 */
 
 		l_resp_dsc->len += (4 * 2);						/* Adjust size of data to 4xbe16 */
+		l_resp_pdu->bc += (4 * 2);
 		}
 
 	if (  l_nr_regs == (4 + 4 + 1) )
@@ -729,6 +732,7 @@ uint16_t	*l_valptr;
 		l_valptr = la_put_be16(l_valptr, l_tm.tm_gmtoff);			/* R8 */
 
 		l_resp_dsc->len += (1 * 2);						/* Adjust size of data to 1xbe16 */
+		l_resp_pdu->bc += (1 * 2);
 		}
 
 
@@ -816,21 +820,30 @@ int	t2r$tty_exec_req (
 int	l_rc;
 T2R$_DESC	*l_req_dsc = a_req_dsc, *l_resp_dsc = a_resp_dsc;
 MODBUS_REQ_T	*l_req_pdu;
+uint16_t	l_uint16;
 
 
 	l_req_pdu = (MODBUS_REQ_T *) l_req_dsc->data;
 
+	l_uint16 = ntohs(l_req_pdu->qty);
+	l_uint16 = ntohs(l_req_pdu->sa);
+
 	/* Special hook for request of local TS */
 	if ( ( a_serial->flags & T2R$M_SERIAL_ADDTS )
-	     && (l_req_pdu->fncode == a_serial->ts_fncode)
-	     && (l_req_pdu->sa == a_serial->ts_base_reg0) )
+	     && ( l_req_pdu->fncode == a_serial->ts_fncode)
+	     && ( ntohs(l_req_pdu->sa) == a_serial->ts_base_reg0) )
+		{
 		if ( !(1 & (l_rc = s_add_ts_to_pdu (a_req_dsc, a_resp_dsc))) )
 			{
 			$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d\%#x) to requester", a_serial->fd, a_serial->devname,
 				  MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
 
-			return	s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
+			l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
 			}
+
+		return	l_rc;
+		}
+
 
 	if ( !(1 & s_tty_lock (a_serial)) )
 		return	$LOG(STS$K_ERROR, "[#%d:<%s>] --- cannot be allocated for exclusive I/O", a_serial->devname, a_serial->fd);

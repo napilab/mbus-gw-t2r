@@ -287,6 +287,8 @@ T2R$_SERIAL	*l_serial;
 		if ( l_serial->flags &  T2R$M_SERIAL_ADDTS )
 			$LOG(STS$K_INFO, "Time Stamp responder for <%s> [Function: %d, Base register: %d] --- enabled",
 				&l_serial->devname, l_serial->ts_fncode, l_serial->ts_base_reg0);
+		else	$LOG(STS$K_WARN, "Time Stamp responder for <%s> --- disabled",
+			&l_serial->devname);
 
 
 		l_serial++;

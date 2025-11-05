@@ -66,6 +66,7 @@ typedef struct modbus_req_t {
 typedef struct modbus_resp_t {
 	unsigned char   slave;
 	unsigned char   fncode;
+	unsigned char	bc;
 	unsigned short  val[0];
 } MODBUS_RESP_T;
 
@@ -87,7 +88,7 @@ typedef struct modbus_adu_t {				/* Application Data Unit */
 #pragma pack (pop)
 
 #define	MODBUS$SZ_MBAPHDR	(2+2+2)				/* Size of MBAP Header: txid + proto + len */
-#define	MODBUS$SZ_PDUHDR	(2+2)				/* Size of PDU Header: slave + fncode */
+#define	MODBUS$SZ_PDUHDR	(2+2+1)				/* Size of PDU Header: slave + fncode + bc */
 
 
 typedef enum {

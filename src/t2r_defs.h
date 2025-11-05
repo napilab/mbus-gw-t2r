@@ -166,7 +166,7 @@ int	t2r$net_stop_listeners (void);
 
 #define	$MBAP_PRINT(a_pref,a_data,a_datalen)	t2r$mbap_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen)
 void	t2r$mbap_print (const char *a__mod, const char *a__fi, const int a__li,
-		const char *a_pref, const void *a_data, int a_datalen);
+		const char *a_pref, const char a_data[], int a_datalen);
 
 
 #define	$RTU_PRINT(a_pref,a_data,a_datalen,a_crc)	t2r$rtu_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen, a_crc)

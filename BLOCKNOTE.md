@@ -120,6 +120,29 @@ modpoll -0 -m tcp -a 2   -t 3  -r 514  -p 503 127.0.0.1 #/dev/ttyS1
 
 
 
+### Request TS ...
+```
+root@devuan4-sysman:/sysman/Works/DOK/mbusd-by-SysMan# mbpoll -1 -a 1 -t 3:hex -r 136 127.0.0.1 -c 4 -v
+
+Connecting to [127.0.0.1]:502
+Set response timeout to 1 sec, 0 us
+Protocol configuration: Modbus TCP
+Slave configuration...: address = [1]
+			start reference = 136, count = 4
+Communication.........: 127.0.0.1, port 502, t/o 1.00 s, poll rate 1000 ms
+Data type.............: 16-bit register, input register table
+
+-- Polling slave 1...
+[00][01][00][00][00][06][01][04][00][87][00][04]
+Waiting for a confirmation...
+<00><01><00><00><00><0D><01><04><08><00><69><69><0B><0B><7C><7C><18>
+[136]:  0x0069
+[137]:  0x690B
+[138]:  0x0B7C
+[139]:  0x7C18
+```
+
+
 
 ## Links & References
 ```

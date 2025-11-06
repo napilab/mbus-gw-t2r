@@ -218,5 +218,8 @@ static inline int s_modbus_crc_correct (
 int t2r$mbap_2_rtu_pdu (const void *a_src_dsc, void *a_dst_dsc);
 int t2r$rtu_pdu_2_mbap (const void *a_src_dsc, void *a_dst_dsc);
 
+const char *t2r$modbus_fn2str(int a_fn);
+const char *t2r$modbus_exc2str(int a_exc);
+
 
 #endif          /* __MODBUSoT_H__ */

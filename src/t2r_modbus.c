@@ -74,7 +74,7 @@ const unsigned short g_modbus_crc16_table[] = {
 
 
 
-static const char *s_modbus_fn2str(
+const char *t2r$modbus_fn2str(
 			int	a_fn
 		)
 {
@@ -100,7 +100,7 @@ static const char *s_modbus_fn2str(
 }
 
 
-static const char *s_modbus_exc2str(
+const char *t2r$modbus_exc2str(
 		int	a_exc
 		)
 {
@@ -157,7 +157,7 @@ char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
 		a_pref, a_datalen,
 		l_txid, l_txid, l_proto, l_proto, l_len, l_len, l_mbap->unit[0],
 		(l_pdu->fncode > MODBUS$M_FN_EXCEPTION) ?  "EXC" : "FUN",
-		l_pdu->fncode, l_pdu->fncode, s_modbus_fn2str(l_pdu->fncode),
+		l_pdu->fncode, l_pdu->fncode, t2r$modbus_fn2str(l_pdu->fncode),
 		l_buf);
 }
 
@@ -205,15 +205,15 @@ char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
 			"\n\tPDU Dump: %s]", a__mod,a__fi, a__li,
 			a_pref, a_datalen,
 			l_slave,
-			l_fncode, l_fncode, s_modbus_fn2str(l_fncode),
+			l_fncode, l_fncode, t2r$modbus_fn2str(l_fncode),
 			l_crc, l_crc_check,
 			l_buf);
 	else	__util$trace(g_trace, "%s RTU PDU %d octets [SLAVE: %d, FUN: %d(%#x-%s), ERR: %d(%#x-%s), CRC: %#04x(calculated: %#04x), "
 			 "\n\tPDU Dump: %s]", a__mod,a__fi, a__li,
 			a_pref, a_datalen,
 			l_slave,
-			l_fncode, l_fncode, s_modbus_fn2str(l_fncode),
-			l_excode, l_excode, s_modbus_exc2str(l_excode),
+			l_fncode, l_fncode, t2r$modbus_fn2str(l_fncode),
+			l_excode, l_excode, t2r$modbus_exc2str(l_excode),
 			l_crc, l_crc_check,
 			l_buf);
 

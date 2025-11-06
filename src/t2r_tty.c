@@ -807,6 +807,57 @@ int	l_rc;
 
 
 
+/*
+ *   DESCRIPTION: Read data from serial line, check that whole ADU has been received, validate CRC.
+ *	1. Wait for POLLIN by using a long timeout - we expect that device can take a time for processing request
+ *	2. Reading bytes using two timeouts:
+ *		- first one: for whole PDU
+ *		- second for reading single byte
+ */
+static int	s_tty_flush (
+	const T2R$_SERIAL	*a_serial
+		)
+{
+int	l_rc;
+struct pollfd	l_pfd = {.fd = a_serial->fd, .events = POLLIN};
+struct timespec l_now_ts, l_end_of_pdu_ts;
+char	l_buf[MODBUS$SZ_MAXPDU];
+
+
+	tcflush(a_serial->fd, TCIOFLUSH);
+
+	/* Compute a timeout for reading whole RTU PDU from serial device*/
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &l_end_of_pdu_ts);
+	__util$add_time (&l_end_of_pdu_ts, &a_serial->inter_pdu_ts, &l_end_of_pdu_ts);
+
+	while ( !g_exit_flag )
+		{
+		/*
+		 * Get current time and check: did we reach a time limit to read whole PDU ?
+		 *
+		 * 	0	- time1 == time2
+		 *	0 >	- time1 < time2
+		 *	0 <	- time1 > time2
+		 */
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &l_now_ts);
+
+		if ( 0 < (l_rc = __util$cmp_time (&l_now_ts, &l_end_of_pdu_ts)) )
+			break;
+
+
+		if ( 0 > (l_rc = poll(&l_pfd, 1, 1 + a_serial->inter_pdu_usec /1024)) )
+			$LOG(STS$K_WARN, "[#%d:<%s>] poll()->%d, errno: %d", a_serial->fd, a_serial->devname, l_rc, errno);
+		else	if ( !l_rc)
+			continue;
+
+
+		if ( 0 > (l_rc = read(a_serial->fd, l_buf, sizeof(l_buf))) )
+			{
+			$LOG(STS$K_WARN, "[#%d:<%s>] read()->%d, errno: %d", a_serial->fd, a_serial->devname, l_rc, errno);
+			break;
+			}
+		}
+}
 
 
 
@@ -835,8 +886,9 @@ uint16_t	l_uint16;
 		{
 		if ( !(1 & (l_rc = s_add_ts_to_pdu (a_req_dsc, a_resp_dsc))) )
 			{
-			$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d\%#x) to requester", a_serial->fd, a_serial->devname,
-				  MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
+			$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d/%#x/%s) to requester", a_serial->fd, a_serial->devname,
+				  MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS,
+				t2r$modbus_exc2str (MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS));
 
 			l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
 			}
@@ -855,7 +907,7 @@ uint16_t	l_uint16;
 
 	if ( !(1 & l_rc) )
 		{
-		tcflush(a_serial->fd, TCIOFLUSH);
+		s_tty_flush (a_serial);
 		$IFTRACE(g_trace, "[#%d:<%s>] --- do flush on I/O error", a_serial->fd, a_serial->devname);
 		}
 
@@ -864,8 +916,9 @@ uint16_t	l_uint16;
 	if ( !(1 & l_rc) )
 		{
 		l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE);
-		$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d\%#x) to requester", a_serial->fd, a_serial->devname,
-		     MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE, MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE);
+		$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d/%#x/%s) to requester", a_serial->fd, a_serial->devname,
+		     MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE, MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE,
+		     t2r$modbus_exc2str (MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE));
 		}
 
 	return	l_rc;

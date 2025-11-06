@@ -1,5 +1,5 @@
 # MODBUS TCP to RTU gateway
-A yet another gateway for MODBUS TCP to RTU (by StarLet Team Edition)
+A yet another gateway for MODBUS TCP to RTU (StarLet Team Edition)
 
 ###	Introduction
 

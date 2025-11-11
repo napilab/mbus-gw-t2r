@@ -794,7 +794,7 @@ int	t2r$tty_close (
 int	l_rc;
 
 	if ( !(1 & s_tty_lock (a_serial)) )
-		return	$LOG(STS$K_ERROR, "[#%d:<%s>] --- closae failed", a_serial->fd, a_serial->devname);
+		return	$LOG(STS$K_ERROR, "[#%d:<%s>] --- close failed", a_serial->fd, a_serial->devname);
 
 	if ( !a_serial->state )
 		l_rc = $LOG(STS$K_WARN, "Device <%s>  has not been initialized", a_serial->devname);
@@ -865,32 +865,29 @@ char	l_buf[MODBUS$SZ_MAXPDU];
 int	t2r$tty_exec_req (
 		T2R$_SERIAL	*a_serial,
 			void	*a_req_dsc,
-			void	*a_resp_dsc
+			void	*a_resp_dsc,
+			uint8_t	*a_excode
 			)
 {
-int	l_rc;
+int	l_rc, l_rcv;
 T2R$_DESC	*l_req_dsc = a_req_dsc, *l_resp_dsc = a_resp_dsc;
 MODBUS_REQ_T	*l_req_pdu;
-uint16_t	l_uint16;
 
+	*a_excode = 0;
 
 	l_req_pdu = (MODBUS_REQ_T *) l_req_dsc->data;
 
-	l_uint16 = ntohs(l_req_pdu->qty);
-	l_uint16 = ntohs(l_req_pdu->sa);
-
-	/* Special hook for request of local TS */
+	/* Special hook to process request of local TS */
 	if ( ( a_serial->flags & T2R$M_SERIAL_ADDTS )
 	     && ( l_req_pdu->fncode == a_serial->ts_fncode)
 	     && ( ntohs(l_req_pdu->sa) == a_serial->ts_base_reg0) )
 		{
 		if ( !(1 & (l_rc = s_add_ts_to_pdu (a_req_dsc, a_resp_dsc))) )
 			{
-			$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d/%#x/%s) to requester", a_serial->fd, a_serial->devname,
-				  MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS,
-				t2r$modbus_exc2str (MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS));
+			l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, *a_excode = l_rcv = MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
 
-			l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS);
+			$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d/%#x/%s) to requester", a_serial->fd, a_serial->devname,
+				  l_rcv, l_rcv, t2r$modbus_exc2str (l_rcv));
 			}
 
 		return	l_rc;
@@ -915,10 +912,10 @@ uint16_t	l_uint16;
 
 	if ( !(1 & l_rc) )
 		{
-		l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE);
+		l_rc = s_make_exception_resp(a_req_dsc, a_resp_dsc, *a_excode = l_rcv = MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE);
+
 		$LOG(STS$K_WARN, "[#%d:<%s>] --- report error (%d/%#x/%s) to requester", a_serial->fd, a_serial->devname,
-		     MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE, MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE,
-		     t2r$modbus_exc2str (MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE));
+		     l_rcv, l_rcv, t2r$modbus_exc2str (l_rcv));
 		}
 
 	return	l_rc;

@@ -214,6 +214,7 @@ struct pollfd l_pfd = {0};
 T2R$_SESSION	*l_session = a_arg;
 struct timespec	l_now;
 T2R$_SERIAL	*l_serial;
+uint8_t		l_excode;
 
 $DESCRIPTOR_S	(l_netbuf_dsc, (2*MODBUS$SZ_MAXPDU));
 $DESCRIPTOR_S	(l_rtu_req_dsc, (2*MODBUS$SZ_MAXPDU));
@@ -233,7 +234,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 	l_session->datalen = MODBUS$SZ_MINADU;
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &l_session->lastio_ts);
 
-	$IFTRACE(g_trace, "[#%d] Serves session for " IPv4_BYTES_FMT ":%d ....", l_session->sd,
+	$LOG(STS$K_INFO, "[#%d] Start session for " IPv4_BYTES_FMT ":%d ....", l_session->sd,
 		 IPv4_BYTES(l_session->sk.sin_addr.s_addr), ntohs(l_session->sk.sin_port));
 
 
@@ -296,9 +297,13 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 					break;
 
 
-				if ( !(1 & (l_rc = t2r$tty_exec_req (l_serial, &l_rtu_req_dsc, &l_rtu_resp_dsc))) )
+				if ( !(1 & (l_rc = t2r$tty_exec_req (l_serial, &l_rtu_req_dsc, &l_rtu_resp_dsc, &l_excode))) )
 					break;
 
+
+				if ( l_excode )
+					$LOG(STS$K_WARN, "[#%d] Request processing failed --- MODBUS's exception: %d/%#x",
+					     l_session->sd, l_excode, l_excode);
 
 				if ( !(1 & (l_rc = t2r$rtu_pdu_2_mbap (&l_rtu_resp_dsc, &l_netbuf_dsc)) ) )
 					break;
@@ -332,23 +337,29 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 
 		if ( !(1 & l_rc) )
+			{
+			$IFTRACE(g_trace, "[#%d] state: %d,  condition code: %#x", l_session->sd, l_session->state, l_rc);
 			break;
+			}
 
 
 		/*
 		 * Check state of network socket ...
 		 */
 		if ( 0 > (l_rc = poll(&l_pfd, 1, 3000 /* 3 secs */)) )
-			$LOG(STS$K_ERROR, "poll()->%d, errno: %d", l_rc, errno);
+			$LOG(STS$K_ERROR, "[#%d] poll()->%d, errno: %d", l_session->sd, l_rc, errno);
 		else if ( l_pfd.revents & (POLLERR | POLLHUP | POLLNVAL) )
+			{
+			$LOG(STS$K_ERROR, "[#%d] poll()->%d, .revents: %#x, errno: %d", l_session->sd, l_rc, l_pfd.revents, errno);
 			break;
+			}
 		else if (l_rc)
 			clock_gettime(CLOCK_MONOTONIC_COARSE, &l_session->lastio_ts);
 		}
 
 
 
-	$IFTRACE(g_trace, "[#%d] Close session for " IPv4_BYTES_FMT ":%d ....", l_session->sd,
+	$LOG(STS$K_INFO, "[#%d] Close session for " IPv4_BYTES_FMT ":%d ....", l_session->sd,
 		 IPv4_BYTES(l_session->sk.sin_addr.s_addr), ntohs(l_session->sk.sin_port));
 
 

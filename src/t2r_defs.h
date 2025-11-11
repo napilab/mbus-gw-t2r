@@ -175,7 +175,7 @@ void	t2r$rtu_print (const char *a__mod, const char *a__fi, const int a__li,
 
 int	t2r$tty_open(T2R$_SERIAL *);
 int	t2r$tty_close(T2R$_SERIAL *);
-int	t2r$tty_exec_req(T2R$_SERIAL *, void *a_req_dsc, void *a_resp_dsc);
+int	t2r$tty_exec_req(T2R$_SERIAL *, void *a_req_dsc, void *a_resp_dsc, uint8_t *a_excode);
 
 #ifdef __cplusplus
 }

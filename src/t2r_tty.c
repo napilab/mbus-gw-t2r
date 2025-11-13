@@ -279,7 +279,7 @@ MODBUS_PDU_T	*l_req_pdu, *l_resp_pdu;
 	l_req_pdu = (MODBUS_PDU_T *) a_req_pdu->data;
 	l_resp_pdu = (MODBUS_PDU_T *) a_resp_pdu->data;
 
-	if ( (l_req_pdu->slave != l_resp_pdu->slave) || (l_req_pdu->fncode != l_resp_pdu->fncode) )
+	if ( (l_req_pdu->slave != l_resp_pdu->slave) || (l_req_pdu->fncode != (l_resp_pdu->fncode & (~MODBUS$M_FN_EXCEPTION))) )
 		return	$LOG(STS$K_WARN, "[#%d:<%s>] Slave: (REQ: %d vs RESP: %d) or Function (REQ: %d vs RESP: %d) --- mismatch",
 			     a_serial->fd, a_serial->devname, l_req_pdu->slave, l_resp_pdu->slave, l_req_pdu->fncode, l_resp_pdu->fncode);
 

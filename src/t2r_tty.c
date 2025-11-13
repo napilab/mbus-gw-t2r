@@ -32,6 +32,7 @@
 #include	<sys/uio.h>
 #include	<linux/serial.h>
 #include	<sys/ioctl.h>
+#include	<linux/i2c.h>
 
 
 #define		__FAC__	"T2R"
@@ -727,7 +728,7 @@ uint16_t	*l_valptr;
 
 	if (  l_nr_regs == (4 + 4 + 1) )
 		{
-		localtime_r(NULL, &l_tm);
+		localtime_r(&l_now.tv_sec, &l_tm);
 
 		l_valptr = la_put_be16(l_valptr, l_tm.tm_gmtoff);			/* R8 */
 

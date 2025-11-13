@@ -52,7 +52,7 @@ values:
 15-10-2025 13:13:00.658  62681 [T2R-NET\s_net_session:232]              [#5] Serves session for 127.0.0.1:38056 ....
 15-10-2025 13:13:00.658  62681 [T2R-MODBUS\t2r$mbap_print:138] %T2R-I:  MBAP Header [TXID: 47813(0xbac5), PROTO: 0(0), LEN: 6(0x6) octets, UNIT: 1, FUN: 4(0x4-READ_INPUT_REGISTERS)]
 15-10-2025 13:13:00.658  62681 [s_net_session:288] Dump of 12 octets follows:
-	+0000:  ba c5 00 00 00 06 01 04 00 01 00 02               ............        
+	+0000:  ba c5 00 00 00 06 01 04 00 01 00 02               ............
 15-10-2025 13:13:00.658  62681 [T2R-TTY\s_tty_lock:76]                  Got exclusive access to </dev/ttyUSB0> ...
 15-10-2025 13:13:01.043  62681 [T2R-TTY\s_tty_rtu_rx:203]               Start reading PDU ...
 15-10-2025 13:13:01.051  62681 [T2R-TTY\s_tty_rtu_rx:237]               Stop reading PDU ...
@@ -60,7 +60,7 @@ values:
 15-10-2025 13:13:01.051  62681 [T2R-TTY\s_tty_unlock:95]                Release lock for </dev/ttyUSB0> (errno: 0)
 15-10-2025 13:13:01.051  62681 [T2R-MODBUS\t2r$mbap_print:138] %T2R-I:  MBAP Header [TXID: 47813(0xbac5), PROTO: 0(0), LEN: 9(0x9) octets, UNIT: 1, FUN: 4(0x4-READ_INPUT_REGISTERS)]
 15-10-2025 13:13:01.051  62681 [s_net_session:304] Dump of 14 octets follows:
-	+0000:  ba c5 00 00 00 09 01 04 04 00 f4 01 67 fa         ............g.      
+	+0000:  ba c5 00 00 00 09 01 04 04 00 f4 01 67 fa         ............g.
 15-10-2025 13:13:01.051  62681 [T2R-NET\s_net_recvn:59] %T2R-W:  [#5] --- peer close connection, errno: 0
 15-10-2025 13:13:01.051  62681 [T2R-NET\s_net_session:344]              [#5] Close session for 127.0.0.1:38056 ....
 ```
@@ -120,7 +120,7 @@ modpoll -0 -m tcp -a 2   -t 3  -r 514  -p 503 127.0.0.1 #/dev/ttyS1
 
 
 
-### Request TS ...
+### Request TS (only seconds) ...
 ```
 root@devuan4-sysman:/sysman/Works/DOK/mbusd-by-SysMan# mbpoll -1 -a 1 -t 3:hex -r 136 127.0.0.1 -c 4 -v
 
@@ -141,6 +141,32 @@ Waiting for a confirmation...
 [138]:  0x0B7C
 [139]:  0x7C18
 ```
+
+
+
+### Request TS (seconds + nanoseconds + timezone_offset) ...
+```
+root@devuan4-sysman:/sysman/Works/DOK/mbusd-by-SysMan# mbpoll -q -1 -a 1 -t 3:hex -r 136 127.0.0.1 -c 9 -v
+debug enabled
+Set device=127.0.0.1
+Connecting to [127.0.0.1]:502
+Set response timeout to 1 sec, 0 us
+-- Polling slave 1...
+[00][01][00][00][00][06][01][04][00][87][00][09]
+Waiting for a confirmation...
+<00><01><00><00><00><17><01><04><12><00><69><69><16><16><0E><0E><9F><00><30><30><CA><CA><E0><E0><42><2A><30>
+[136]:  0x0069
+[137]:  0x6916
+[138]:  0x160E
+[139]:  0x0E9F
+[140]:  0x0030
+[141]:  0x30CA
+[142]:  0xCAE0
+[143]:  0xE042
+[144]:  0x2A30
+```
+
+
 
 
 

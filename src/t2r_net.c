@@ -254,7 +254,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 				break;
 				}
 			}
-		else if ( (l_session->lastio_ts.tv_sec + T2R$K_NET_TMO_SEC) < l_now.tv_sec)		/* 3 secs for read\write MBAP */
+		else if ( (l_session->lastio_ts.tv_sec + T2R$K_NET_TMO_SEC) < l_now.tv_sec)	/* 3 secs for read\write MBAP */
 				{
 				$LOG(STS$K_ERROR, "[#%d] No data read (%d octets) in  %d seconds",
 				     l_session->sd, l_session->datalen, T2R$K_NET_TMO_SEC );
@@ -359,7 +359,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 
 
-	$LOG(STS$K_INFO, "[#%d] Close session for " IPv4_BYTES_FMT ":%d ....", l_session->sd,
+	$LOG(STS$K_INFO, "[#%d] Close session for " IPv4_BYTES_FMT ":%d", l_session->sd,
 		 IPv4_BYTES(l_session->sk.sin_addr.s_addr), ntohs(l_session->sk.sin_port));
 
 

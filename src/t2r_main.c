@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-01"
-#define	__REV__		"00.00.01"
+#define	__IDENT__	"X.00-03"
+#define	__REV__		"00.00.03"
 
 /*
 **++
@@ -27,6 +27,9 @@
 **
 **  MODIFICATION HISTORY:
 **
+**	13-NOV-2025	RRL	X.00-02 - pre-Release candidat
+**
+**	18-NOV-2025	RRL	X.00-03 - Improved TS configuratiuon section by using Unit\Slave Id to deterrminate  TS request
 **
 **--
 */
@@ -209,21 +212,6 @@ T2R$_SERIAL	*l_serial;
 			strncpy(l_serial->devname, l_str, T2R$K_TTY_DEVNAME);
 
 
-		if ( config_setting_lookup_int(l_args, "addts", &l_int) )
-			l_serial->flags |=  T2R$M_SERIAL_ADDTS;
-
-		if ( config_setting_lookup_int(l_args, "ts_fncode", &l_int) )
-			l_serial->ts_fncode =  l_int;
-		else	l_serial->ts_fncode = T2R$K_TS_FNCODE;
-
-		if ( config_setting_lookup_int(l_args, "ts_base_reg0", &l_int) )
-			l_serial->ts_base_reg0 =  l_int;
-		else	l_serial->ts_fncode = T2R$K_TS_BASE_REG0;
-
-
-
-
-
 #ifdef HAVE_TIOCRS485
 		if ( config_setting_lookup_int(l_args, "rs485", &l_int) )
 			l_serial->flags |=  T2R$M_SERIAL_RS485;
@@ -277,6 +265,24 @@ T2R$_SERIAL	*l_serial;
 			l_serial->inter_pdu_ts.tv_nsec = 4 * l_serial->onebyte_time_usec * 1000;/* microsec to nanosec */
 
 
+
+			if ( config_setting_lookup_int(l_args, "ts_enabled", &l_int) )
+				{
+				l_serial->flags |=  T2R$M_SERIAL_ADDTS;
+
+				if ( config_setting_lookup_int(l_args, "ts_fncode", &l_int) )
+					l_serial->ts_fncode =  l_int;
+				else	l_serial->ts_fncode = T2R$K_TS_FNCODE;
+
+				if ( config_setting_lookup_int(l_args, "ts_base_reg0", &l_int) )
+					l_serial->ts_base_reg0 =  l_int;
+				else	l_serial->ts_base_reg0 = T2R$K_TS_BASE_REG0;
+
+				if ( config_setting_lookup_int(l_args, "ts_unit", &l_int) )
+					l_serial->ts_unit_nr =  l_int;
+				else	l_serial->ts_unit_nr = T2R$K_TS_UNIT;
+				}
+
 			pthread_mutex_init(&l_serial->lock, 0);
 			}
 
@@ -285,8 +291,8 @@ T2R$_SERIAL	*l_serial;
 			l_serial->anstmo_msec, l_serial->inter_pdu_usec);
 
 		if ( l_serial->flags &  T2R$M_SERIAL_ADDTS )
-			$LOG(STS$K_INFO, "Time Stamp responder for <%s> [Function: %d, Base register: %d] --- enabled",
-				&l_serial->devname, l_serial->ts_fncode, l_serial->ts_base_reg0);
+			$LOG(STS$K_INFO, "Time Stamp responder for <%s> [Unit: %d, Function: %d, Base register: %d] --- enabled",
+				&l_serial->devname, l_serial->ts_unit_nr, l_serial->ts_fncode, l_serial->ts_base_reg0);
 		else	$LOG(STS$K_WARN, "Time Stamp responder for <%s> --- disabled",
 			&l_serial->devname);
 

@@ -76,7 +76,8 @@ enum {
 
 
 #define		T2R$K_TS_FNCODE	(MODBUS$K_FN_READ_HOLDING_REGISTERS)
-#define		T2R$K_TS_BASE_REG0	7777
+#define		T2R$K_TS_BASE_REG0	8135
+#define		T2R$K_TS_UNIT		135
 
 typedef struct	t2r$_desc {
 	int	sz,
@@ -118,9 +119,12 @@ typedef struct	t2r$_serial {
 
 		int	anstmo_msec,					/* A time to wait an answer for has been sent request */
 			inter_pdu_usec,					/* A delay before and after PDU on RTU */
-			onebyte_time_usec,				/* Estimated time to send byte over serial line in nanoseconds */
-			ts_fncode,
-			ts_base_reg0;
+			onebyte_time_usec;				/* Estimated time to send byte over serial line in nanoseconds */
+
+		uint8_t	ts_unit_nr,
+			ts_fncode;
+
+		uint16_t ts_base_reg0;
 
 	struct termios	savedtios,
 			tios;

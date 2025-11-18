@@ -880,6 +880,7 @@ MODBUS_REQ_T	*l_req_pdu;
 
 	/* Special hook to process request of local TS */
 	if ( ( a_serial->flags & T2R$M_SERIAL_ADDTS )
+	     && ( l_req_pdu->slave == a_serial->ts_unit_nr)
 	     && ( l_req_pdu->fncode == a_serial->ts_fncode)
 	     && ( ntohs(l_req_pdu->sa) == a_serial->ts_base_reg0) )
 		{

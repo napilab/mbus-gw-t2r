@@ -58,7 +58,6 @@ endif()
 
 
 include_directories (
-	${3RDPARTY_ROOT}/uthash/include/
 	${STARLET_DIR}
 	src/
 	${LIBCONFIG_DIR}/lib/

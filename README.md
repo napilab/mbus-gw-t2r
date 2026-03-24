@@ -1,5 +1,22 @@
 # MODBUS TCP to RTU gateway
-A yet another gateway for MODBUS TCP to RTU (StarLet Team Edition)
+A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 (tm) Team)
+
+###	NAPI World
+This project is developed and maintained by the NAPI Lab team
+and is primarily tested on NAPI industrial single-board computers based on Rockchip SoCs.
+
+####	NAPI Boards
+
+If you are looking for a reliable hardware platform to run modbus_slave in production,
+check out the NAPI board lineup:
+
+Welcome to NAPI Wolrd (https://github.com/napilab/napi-boards) for more information!
+
+Right now is available:
+
+- NAPI2 — RK3568J, RS-485 onboard, Armbian
+- NAPI-C — RK3308, compact, industrial grade
+
 
 ###	Introduction
 
@@ -8,8 +25,13 @@ A simple TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a tuto
  - a development of programming skills
  - a programming for I/O on  RS323 and RS-485 ports
  - basic checking of work of MODBUS-capable devices
- - build two-directionional gateways for TCP-to-RTU and RTU-to-TCP
- 
+ - build two-directionional gateways for TCP-to-RTU and RTU-to-TCP (not implemetde yet)
+
+###	Main features & advantages
+  - support of RS-232 and RS-485 specific signaling
+  - single process with multithreaded architecure for high performance
+  - coordinating access between multiple TCP-clients is connected to single serial bus\device
+  - robust error handling ad recognising serial-line garbage
 
 
 
@@ -31,27 +53,36 @@ $ cmake ../CMakeLists.txt -DCMAKE_BUILD_TYPE=Debug -B ./
 $ make -s
 ```
 
-### 	Quick configuration
+### 	Run & Configuration rules
 
-A configuration option is a single line text string  starting with "-" or "/",  option case is not matter :
+####	Quick start
 
-`/<option_name>=<option_value>`
+##### General CLI format to start gateway
+```
+./build/mbusgw-t2r <CLI options> --settings=<network-n-serials-settings.fil>
+```
 
-or 
+##### Example:
 
-`-<option_name>=<option_value>`
+```
+./build/mbusgw-t2r --trace --settings=modbus-t2r-settins.conf
+```
 
-Example:
+##### CLI options
+
+| Option		|  Description
+| ------		| ------------------------------------------------------------
+| trace			| Enable extensible diagnostic output. Useful for for debug and troubleshouting purpose.
+| logfile=\<fpsec\>	| Set a file name to accept logging output
+| logsize=\<number\>	| Limit size of log file.
+| settings=\<fspec\>	| Provide a rin-time configuration for network stuff and serial devices
 
 
--logfile=/tmp/ttr.log
-
-| Option | Format        | Fields  | Description                                                  |
-| ------ | ------------- | ------- | ------------------------------------------------------------ |
-
-
-
+##### Settings options
+Check an example of settings file for reference of parameters and rules of configurations
 
 ## Authors and acknowledgment
 
-Developer - Ruslan (AKA : The BadAss SysMan) Laishev, VAX/VMS bigot, BMF.
+Developer: Ruslan (AKA : The BadAss SysMan) Laishev
+VAX/VMS bigot,
+BMF.

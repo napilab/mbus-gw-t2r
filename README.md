@@ -1,5 +1,5 @@
 # MODBUS TCP to RTU gateway
-A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 (tm) Team)
+A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 and NAPILab Teams)
 
 ###	NAPI World
 This project is developed and maintained by the NAPI Lab team
@@ -7,7 +7,7 @@ and is primarily tested on NAPI industrial single-board computers based on Rockc
 
 ####	NAPI Boards
 
-If you are looking for a reliable hardware platform to run modbus_slave in production,
+If you are looking for a reliable hardware platform to run MODBUS transport sowftware in production,
 check out the NAPI board lineup:
 
 Welcome to NAPI Wolrd (https://github.com/napilab/napi-boards) for more information!
@@ -20,27 +20,29 @@ Right now is available:
 
 ###	Introduction
 
-A simple TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a tutorial for:
+A easy-to-use TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a tutorial for:
 
- - a development of programming skills
- - a programming for I/O on  RS323 and RS-485 ports
+ - a development of general programming skills
+ - a programming skill esspecialy for I/O on  RS323 and RS-485 ports
  - basic checking of work of MODBUS-capable devices
- - build two-directionional gateways for TCP-to-RTU and RTU-to-TCP (not implemetde yet)
+ - build two-directionional gateways for TCP-to-RTU and RTU-to-TCP (not implemented yet)
+ - transparently pass serial I/O over TCP
 
 ###	Main features & advantages
   - support of RS-232 and RS-485 specific signaling
-  - single process with multithreaded architecure for high performance
+  - single process with multithreaded architecture for high performance
   - coordinating access between multiple TCP-clients is connected to single serial bus\device
-  - robust error handling ad recognising serial-line garbage
+  - robust error handling and recognizing of serial-line garbage and trouble-recovery tecnicks
+    
 
 
 
 ### 	Build from sources
 
 ```
-$ git clone  https://gitlab.com/SysMan-One/mbus-gw-t2r
+$ git clone  <URL of repo>
 $ cd mbus-gw-t2r
-$ git submodule update --init
+$ git submodule update --init --recursive
 
 $ mkdir build
 $ cd build
@@ -82,7 +84,6 @@ $ make -s
 Check an example of settings file for reference of parameters and rules of configurations
 
 ## Authors and acknowledgment
-
 Developer: Ruslan (AKA : The BadAss SysMan) Laishev
 VAX/VMS bigot,
 BMF.

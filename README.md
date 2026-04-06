@@ -6,7 +6,6 @@ This project is developed and maintained by the NAPI Lab team
 and is primarily tested on NAPI industrial single-board computers based on Rockchip SoCs.
 
 ####	NAPI Boards
-
 If you are looking for a reliable hardware platform to run MODBUS transport sowftware in production,
 check out the NAPI board lineup:
 
@@ -19,8 +18,7 @@ Right now is available:
 
 
 ###	Introduction
-
-A easy-to-use TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a tutorial for:
+A easy-to-use TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a tutorial (and not only) for:
 
  - a development of general programming skills
  - a programming skill esspecialy for I/O on  RS323 and RS-485 ports
@@ -29,6 +27,8 @@ A easy-to-use TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a
  - transparently pass serial I/O over TCP
 
 ###	Main features & advantages
+  - serves multiple MODBUS-capable devices on single RS-485 line
+  - serves single RS-485 line on multiple TCP-ports
   - support of RS-232 and RS-485 specific signaling
   - single process with multithreaded architecture for high performance
   - coordinating access between multiple TCP-clients is connected to single serial bus\device

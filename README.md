@@ -1,15 +1,15 @@
 # MODBUS TCP to RTU gateway
-A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 and NAPILab Teams)
+A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 and NaPiLab Teams)
 
-###	NAPI World
-This project is developed and maintained by the NAPI Lab team
-and is primarily tested on NAPI industrial single-board computers based on Rockchip SoCs.
+###	NaPi World
+This project is developed and maintained by the NaPi Lab team
+and is primarily tested on NaPi industrial single-board computers based on Rockchip SoCs.
 
-####	NAPI Boards
+####	NaPi Boards
 If you are looking for a reliable hardware platform to run MODBUS transport sowftware in production,
-check out the NAPI board lineup:
+check out the NaPi board lineup:
 
-Welcome to NAPI Wolrd (https://github.com/napilab/napi-boards) for more information!
+Welcome to NaPi Wolrd (https://github.com/napilab/napi-boards) for more information!
 
 Right now is available:
 

@@ -34,6 +34,29 @@ A easy-to-use TCP-to-RTU gateway for MODBUS protocol is supposed to be used as a
   - coordinating access between multiple TCP-clients is connected to single serial bus\device
   - robust error handling and recognizing of serial-line garbage and trouble-recovery tecnicks
 
+###	When to choose mbusgw-t2r over mbusd
+
+This project is an alternative to the well-known [mbusd](https://github.com/3cky/mbusd)
+gateway --- for the case when a high efficiency at a lower resource consumption is the
+point. Both translate MODBUS TCP to RTU; the differences which matter in practice:
+
+  - **The serial line discipline.** The end-of-frame is detected by the honest t3.5 silence
+    criteria with the specification-mandated inter-frame gap --- the RTU bus is driven at its
+    physical maximum, no fixed per-request pauses are inserted.
+  - **The waiting model.** All the waiting is `poll()`-driven with no timers ticking in the
+    background: an idle gateway consumes practically zero CPU, which matters on a small
+    industrial SBC running from a modest power budget.
+  - **The diagnostics.** Every error is a coded, greppable log message with the concrete
+    reason (the CRC values, the `errno`, the allowed range) --- the troubleshooting is a
+    reading exercise, not a guessing one.
+  - **The extras.** Several TCP ports per one line, several lines per one process, the
+    built-in Time Stamp pseudo device, the RS-485 kernel direction control --- all in a
+    ~100 KB binary with libconfig as the only runtime dependency.
+
+If mbusd already serves you well --- keep it. If you are squeezing the most out of a busy
+RS-485 line on a small box, or you are tired of guessing why a request failed --- this
+gateway is for you.
+
 ###	Reliability, footprint & performance
 
 **No error slips through.** Every RTU frame coming from the line is validated before it is

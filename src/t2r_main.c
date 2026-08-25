@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-07ECO01"
-#define	__REV__		"00.07.01"
+#define	__IDENT__	"X.00-07ECO02"
+#define	__REV__		"00.07.02"
 
 /*
 **++
@@ -79,6 +79,10 @@
 **
 **	25-AUG-2026	RRL	X.00-07ECO01 / REV: 00.07.01 - The delivery change (no C source change):
 **				README gained the "Reliability, footprint & performance" section.
+**
+**	25-AUG-2026	RRL	X.00-07ECO02 / REV: 00.07.02 - The delivery change (no C source change):
+**				README positions the project as an alternative to mbusd for the high
+**				efficiency at a lower resource consumption case.
 **
 **--
 */

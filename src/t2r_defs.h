@@ -9,11 +9,18 @@
 **  DESCRIPTION: Data Srtuctures and constant definitions is supposed to be used across all MODBUS-TCP2RTU's modules
 **
 **
-**  AUTHORS: Ruslan R. (The BadAss Sysman) Laishev
+**  AUTHORS: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 **
 **  CREATION DATE:  10-AUG-2025
 **
 **  MODIFICATION HISTORY:
+**
+**	25-AUG-2026	RRL	X.00-04: $MBAP_PRINT/$RTU_PRINT do check <g_trace> before the call;
+**				added T2R$K_ANSTMO_MSEC - a default answer timeout;
+**				T2R$_LISTENER.target is filled as a plain ASCIIZ string now.
+**
+**	25-AUG-2026	RRL	X.00-04ECO01 / REV: 00.04.01 - Added T2R$K_BAUD_/DATABITS_/STOPBITS_/PORT_
+**				MIN/MAX limit constants for validation of the configurable parameters.
 **
 **--
 */
@@ -28,6 +35,7 @@
 #include	<pthread.h>
 
 #include	"utility_routines.h"					/* Starlet's Utility/General purpose routines */
+#include	"starlet.h"						/* FAO: fao_prm_t for the $PUTMSG_FAO parameters */
 #include	"t2r_modbus.h"
 
 
@@ -72,6 +80,19 @@ enum {
 #define		T2R$K_MAX_SERIALS	128
 #define		T2R$K_IDLE_TMO_SEC	1200				/* Global timeout for idle sessions */
 #define		T2R$K_NET_TMO_SEC	300				/* A timeout for reading data from network socket */
+#define		T2R$K_ANSTMO_MSEC	1000				/* A default timeout to wait an answer on the RTU leg */
+
+/*
+ * Limits for validation of the has been configured parameters of a serial line and a listener
+ */
+#define		T2R$K_BAUD_MIN		50				/* Slowest POSIX line rate			*/
+#define		T2R$K_BAUD_MAX		4000000				/* B4000000 - fastest one			*/
+#define		T2R$K_DATABITS_MIN	5				/* CS5						*/
+#define		T2R$K_DATABITS_MAX	8				/* CS8						*/
+#define		T2R$K_STOPBITS_MIN	1
+#define		T2R$K_STOPBITS_MAX	2
+#define		T2R$K_PORT_MIN		1				/* TCP port range				*/
+#define		T2R$K_PORT_MAX		65535
 #define		T2R$K_TTY_DEVNAME	64
 
 
@@ -168,12 +189,22 @@ int	t2r$net_start_listeners (void);
 int	t2r$net_stop_listeners (void);
 
 
-#define	$MBAP_PRINT(a_pref,a_data,a_datalen)	t2r$mbap_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen)
+extern	int	g_trace;							/* Declared in T2R-MAIN, is used by the dump macros */
+
+/*
+ *  Both dump macros do check <g_trace> BEFORE the call: the routines convert a whole PDU
+ *  to a hex string, so we do not want to pay for it (and to touch the data) in a silent mode.
+ */
+#define	$MBAP_PRINT(a_pref,a_data,a_datalen)	do { if ( g_trace ) \
+		t2r$mbap_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen); } while (0)
+
 void	t2r$mbap_print (const char *a__mod, const char *a__fi, const int a__li,
 		const char *a_pref, const char a_data[], int a_datalen);
 
 
-#define	$RTU_PRINT(a_pref,a_data,a_datalen,a_crc)	t2r$rtu_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen, a_crc)
+#define	$RTU_PRINT(a_pref,a_data,a_datalen,a_crc)	do { if ( g_trace ) \
+		t2r$rtu_print(__MODULE__, __FUNCTION__, __LINE__, a_pref, a_data, a_datalen, a_crc); } while (0)
+
 void	t2r$rtu_print (const char *a__mod, const char *a__fi, const int a__li,
 		const char *a_pref, const void *a_data, int a_datalen, uint16_t a_crc);
 

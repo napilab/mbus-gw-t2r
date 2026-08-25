@@ -1,4 +1,6 @@
 #define	__MODULE__	"T2R-MODBUS"
+#define	__IDENT__	"X.00-04ECO02"
+#define	__REV__		"00.04.02"
 
 /*
 **++
@@ -10,12 +12,24 @@
 **
 **  DESCRIPTION: Auxiliary routines related to MODBUS
 **
-**  AUTHORS: Ruslan R. (The BadAss Sysman) Laishev
+**  AUTHORS: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 **
 **  CREATION DATE:  29-SEP-2025
 **
 **  MODIFICATION HISTORY:
 **
+**	25-AUG-2026	RRL	X.00-04 / REV: 00.04.00 - Audit fixes:
+**				t2r$mbap_print()/t2r$rtu_print(): the dump length is clipped both by the
+**				really received data and by the capacity of the hex buffer (stack overflow);
+**				t2r$rtu_print(): the has been passed <a_crc> is shown (was lost), the CRC
+**				trailer is assembled octet-by-octet (alignment and byte order safe);
+**				t2r$mbap_2_rtu_pdu(): defensive check of the source data length;
+**				t2r$ascii_pdu2rtu(): ':' prefix (was ';'), t2r$rtu_pdu2ascii(): fixed an
+**				always-true framing check; fixed "ILLEGAL_FUNCTION" typo.
+**
+**	25-AUG-2026	RRL	X.00-04ECO02 / REV: 00.04.02 - Commenting only, no functional change:
+**				every routine has been supplied by the standard DESCRIPTION/INPUTS/
+**				OUTPUTS/RETURNS header block with the detailed parameters description.
 **
 **--
 */
@@ -74,6 +88,19 @@ const unsigned short g_modbus_crc16_table[] = {
 
 
 
+/*
+ *   DESCRIPTION: Translate a MODBUS function code to a human readable mnemonic for the
+ *	diagnostic messages.
+ *
+ *   INPUTS:
+ *	a_fn:		A MODBUS function code (MODBUS$K_FN_* constants)
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	An address of the ASCIIZ mnemonic string, "UNKNOWN" - for an unrecognized code
+ */
 const char *t2r$modbus_fn2str(
 			int	a_fn
 		)
@@ -100,6 +127,19 @@ const char *t2r$modbus_fn2str(
 }
 
 
+/*
+ *   DESCRIPTION: Translate a MODBUS exception code to a human readable mnemonic for the
+ *	diagnostic messages.
+ *
+ *   INPUTS:
+ *	a_exc:		A MODBUS exception code (MODBUS$K_EXCEPTION_* constants)
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	An address of the ASCIIZ mnemonic string, "UNKNOWN" - for an unrecognized code
+ */
 const char *t2r$modbus_exc2str(
 		int	a_exc
 		)
@@ -109,7 +149,7 @@ const char *t2r$modbus_exc2str(
 		{
 		case	MODBUS$K_EXCEPTION_NOERROR:			return	"NONE";
 
-		case	MODBUS$K_EXCEPTION_ILLEGAL_FUNCTION:		return	"LLEGAL_FUNCTION";
+		case	MODBUS$K_EXCEPTION_ILLEGAL_FUNCTION:		return	"ILLEGAL_FUNCTION";
 		case	MODBUS$K_EXCEPTION_ILLEGAL_DATA_ADDRESS:	return	"ILLEGAL_DATA_ADDRESS";
 		case	MODBUS$K_EXCEPTION_ILLEGAL_DATA_VALUE:		return	"ILLEGAL_DATA_VALUE";
 		case	MODBUS$K_EXCEPTION_SERVER_DEVICE_FAILURE:	return	"SERVER_DEVICE_FAILURE";
@@ -129,6 +169,27 @@ const char *t2r$modbus_exc2str(
 
 
 
+/*
+ *   DESCRIPTION: Print a formatted dump of a MODBUS TCP ADU (MBAP header + PDU) into the log:
+ *	the header fields are decoded, the PDU part is dumped as a hex string. The dump length
+ *	is clipped both by the really received data and by the capacity of the hex buffer.
+ *	Is supposed to be called via the $MBAP_PRINT macro which supplies the source code
+ *	position and checks the <g_trace> flag.
+ *
+ *   INPUTS:
+ *	a__mod:		A name of the calling module (__MODULE__)
+ *	a__fi:		A name of the calling routine (__FUNCTION__)
+ *	a__li:		A line number at the calling module (__LINE__)
+ *	a_pref:		A prefix text for the dump ("Rcvd", "Sent", ...)
+ *	a_data:		An address of the ADU
+ *	a_datalen:	An actual length of the ADU in octets
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	NONE
+ */
 void	t2r$mbap_print (
 		const char	*a__mod,
 		const char	*a__fi,
@@ -138,17 +199,29 @@ void	t2r$mbap_print (
 			int	a_datalen
 		)
 {
-MODBUS_ADU_T *l_mbap = (MODBUS_ADU_T *) a_data;
-uint16_t	l_txid, l_proto, l_len;
+MODBUS_ADU_T	*l_mbap = (MODBUS_ADU_T *) a_data;
 MODBUS_PDU_T	*l_pdu;
-char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
+uint16_t	l_txid, l_proto, l_len;
+int	l_dumplen;
+char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len + 1 octets ! */
+
+	if ( (!a_data) || (a_datalen < MODBUS$SZ_MINMBAP) )			/* Nothing to show or a truncated header */
+		return;
 
 	l_txid  = ntohs(l_mbap->txid);
-	l_proto =  ntohs(l_mbap->proto);
-	l_len =  ntohs(l_mbap->len);
+	l_proto = ntohs(l_mbap->proto);
+	l_len   = ntohs(l_mbap->len);
 	l_pdu = (MODBUS_PDU_T *) l_mbap->unit;
 
-	__util$bin2hex (l_pdu, l_buf, l_len);
+	/*
+	 * <l_len> is taken from the wire, so it is not trusted: the dump length is limited both by
+	 * the amount of the data we really have and by the capacity of the output buffer.
+	 */
+	l_dumplen = a_datalen - MODBUS$SZ_MBAPHDR;
+	l_dumplen = (l_dumplen > l_len) ? l_len : l_dumplen;
+	l_dumplen = (l_dumplen > MODBUS$SZ_MAXPDU) ? MODBUS$SZ_MAXPDU : l_dumplen;
+
+	__util$bin2hex (l_pdu, l_buf, l_dumplen);
 
 
 	__util$trace(g_trace, "%s MODBUS ADU %d octets [TXID: %d(%#x), PROTO: %d(%#x), LEN: %d(%#x) octets, UNIT: %d, "
@@ -164,6 +237,28 @@ char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
 
 
 
+/*
+ *   DESCRIPTION: Print a formatted dump of a MODBUS RTU frame into the log: the slave address,
+ *	the function code (an exception flag is decoded), the CRC16 and a hex dump of the frame.
+ *	Is supposed to be called via the $RTU_PRINT macro which supplies the source code
+ *	position and checks the <g_trace> flag.
+ *
+ *   INPUTS:
+ *	a__mod:		A name of the calling module (__MODULE__)
+ *	a__fi:		A name of the calling routine (__FUNCTION__)
+ *	a__li:		A line number at the calling module (__LINE__)
+ *	a_pref:		A prefix text for the dump ("Rcvd", "Sent", ...)
+ *	a_data:		An address of the RTU frame
+ *	a_datalen:	An actual length of the frame in octets
+ *	a_crc:		A has been computed CRC16 (TX path), 0 - take the CRC from the frame
+ *			trailer and verify it (RX path)
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	NONE
+ */
 void	t2r$rtu_print (
 		const char	*a__mod,
 		const char	*a__fi,
@@ -174,31 +269,39 @@ void	t2r$rtu_print (
 		uint16_t	a_crc
 		)
 {
-uint8_t		*l_data;
-uint8_t		l_slave, l_fncode, l_excode = 0;
+uint8_t	*l_data;
+uint8_t	l_slave, l_fncode, l_excode = 0;
 uint16_t	l_crc = 0, l_crc_check = 0;
-char	l_buf[MODBUS$SZ_MAXPDU * 2] = {0};
+int	l_dumplen;
+char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len + 1 octets ! */
 
+	if ( (!a_data) || (a_datalen < 2) )					/* Nothing to show */
+		return;
 
 	l_data = (uint8_t *) a_data;
 
 	l_slave = *(l_data);
 	l_fncode = *(l_data + 1);
 
-	if ( l_fncode > MODBUS$M_FN_EXCEPTION )
+	if ( l_fncode & MODBUS$M_FN_EXCEPTION )					/* An exception is a flag, not a threshold */
 		{
-		l_excode = *(l_data + 2);
+		l_excode = (a_datalen > 2) ? *(l_data + 2) : 0;
 		l_fncode &= ~MODBUS$M_FN_EXCEPTION;
 		}
 
-	if ( !a_crc )
+	if ( a_crc )								/* CRC is supplied by the caller (TX path) */
+		l_crc = l_crc_check = a_crc;
+	else if ( a_datalen > 2 )						/* CRC is a trailer of the frame (RX path) */
 		{
-		l_crc = *((uint16_t *) (l_data + a_datalen - 2));
-		l_crc_check = s_modbus_crc_calculate (a_data, a_datalen - 2);
-		}
-	else	l_crc = l_crc_check;
+		l_crc = (uint16_t) l_data[a_datalen - 2]			/* Lo octet goes first on the wire */
+			| ((uint16_t) l_data[a_datalen - 1] << 8);
 
-	__util$bin2hex (a_data, l_buf, a_datalen);
+		l_crc_check = s_modbus_crc_calculate (l_data, a_datalen - 2);
+		}
+
+	l_dumplen = (a_datalen > MODBUS$SZ_MAXPDU) ? MODBUS$SZ_MAXPDU : a_datalen;
+
+	__util$bin2hex (l_data, l_buf, l_dumplen);
 
 	if ( !l_excode )
 		__util$trace(g_trace, "%s RTU PDU %d octets [SLAVE: %d, FUN: %d(%#x-%s), CRC: %#04x(calculated: %#04x), "
@@ -250,6 +353,10 @@ uint16_t	l_len;
 
 	if ( (l_len = ntohs(l_mbap->len)) > l_dst_dsc->sz )
 		return	$LOG(STS$K_ERROR, "No room for output data (%d > %d octets)", l_len, l_dst_dsc->sz );
+
+	if ( l_len > (l_src_dsc->len - MODBUS$SZ_MBAPHDR) )			/* Never trust the wire-declared length */
+		return	$LOG(STS$K_ERROR, "MBAP length field (%d) exceeds received data (%d octets)",
+				l_len, l_src_dsc->len - MODBUS$SZ_MBAPHDR);
 
 
 	memcpy(l_dst_dsc->data, &l_mbap->unit, l_len);				/* Copy request part of MBAP to RTU PUD buffer*/
@@ -329,7 +436,7 @@ char	*l_dst;
 
 	l_dst = l_dst_dsc->data;
 
-	*(l_dst++) = ';';								/* Prefix of HEX data */
+	*(l_dst++) = ':';								/* Prefix of HEX data */
 	__util$bin2hex (l_src_dsc->data, l_dst, l_src_dsc->len);			/* Convert octet string to hex string */
 	l_dst += (l_src_dsc->len * 2);							/* Point <l_dst> to end of "ascii" data */
 
@@ -381,7 +488,7 @@ const char	*l_src;
 	if ( *l_src != ':' )								/* Check for prefix ':' */
 		return	STS$K_ERROR;
 
-	if ( (*(l_src + l_src_dsc->len - 1) != '\r') || (*(l_src + l_src_dsc->len - 1) != '\n') )	/* Invalid termination sequence */
+	if ( (*(l_src + l_src_dsc->len - 2) != '\r') || (*(l_src + l_src_dsc->len - 1) != '\n') )	/* Invalid termination sequence */
 		return	STS$K_ERROR;
 
 

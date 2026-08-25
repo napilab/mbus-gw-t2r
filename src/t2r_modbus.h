@@ -17,6 +17,12 @@
 **
 **      29-JAN-2024     RRL     Replaced fucking "__attribute__((aligned(1))) " by "pack (push, 1)"
 **
+**	25-AUG-2026	RRL	X.00-04: Fixed MODBUS$SZ_PDUHDR (was a copy of the MBAP header size: 5 vs 3),
+**				fixed MODBUS$K_MAXWORDS (96 -> 125, the FC03/FC04 limit).
+**
+**	25-AUG-2026	RRL	X.00-04ECO02 / REV: 00.04.02 - Commenting only: the standard header blocks
+**				for s_modbus_crc_calculate() and s_modbus_crc_correct().
+**
 **--
 */
 
@@ -32,7 +38,7 @@
 #define MODBUS$SZ_MAXPDU        256                             /* Max size of the MODBUS's PDU */
 #define MODBUS$K_STARTADDR_MIN  0
 #define MODBUS$K_STARTADDR_MAX  0xFFFF
-#define MODBUS$K_MAXWORDS       96                              /* 250 octets */
+#define MODBUS$K_MAXWORDS       125                             /* 250 octets, FC03/FC04 limit */
 #define MODBUS$K_MAXBITS        2000                            /* 250 octets */
 #define MODBUS$K_MAXOCTETS      125                             /* 250 octets */
 
@@ -88,7 +94,7 @@ typedef struct modbus_adu_t {				/* Application Data Unit */
 #pragma pack (pop)
 
 #define	MODBUS$SZ_MBAPHDR	(2+2+2)				/* Size of MBAP Header: txid + proto + len */
-#define	MODBUS$SZ_PDUHDR	(2+2+1)				/* Size of PDU Header: slave + fncode + bc */
+#define	MODBUS$SZ_PDUHDR	(1+1+1)				/* Size of PDU Header: slave + fncode + bc */
 
 
 typedef enum {
@@ -177,10 +183,19 @@ typedef enum {
 
 
 /*
- * Calculate Modbus frame CRC (Cyclical Redundancy Checking) value
- * Parameters: FRAME - address of the frame,
- *             LEN   - frame length;
- * Return: calculated CRC value
+ *   DESCRIPTION: Compute the CRC16/MODBUS checksum of the given octets sequence: a table-driven
+ *	implementation over g_modbus_crc16_table[], initial value 0xFFFF, no final XOR. The low
+ *	octet of the result goes first on the wire.
+ *
+ *   INPUTS:
+ *	a_frame:	An address of the octets sequence (a frame without the CRC trailer)
+ *	a_len:		A length of the sequence in octets
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	The has been computed CRC16 value; 0 - the length exceeds MODBUS$SZ_MAXPDU
  */
 static inline unsigned short s_modbus_crc_calculate(
 		const unsigned char	*a_frame,
@@ -200,11 +215,18 @@ extern	const unsigned short g_modbus_crc16_table[];
 }
 
 /*
- * Check CRC of MODBUS frame
- * Parameters: FRAME - address of the frame,
- *             LEN   - frame length;
- * Return: 0 if CRC failed,
- *         non-zero otherwise
+ *   DESCRIPTION: Check the CRC16 of a whole MODBUS RTU frame (the CRC trailer included): the
+ *	CRC computed over a frame together with its own correct trailer is zero.
+ *
+ *   INPUTS:
+ *	a_frame:	An address of the frame including the 2 octets CRC trailer
+ *	a_len:		A length of the frame in octets, the trailer included
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	non-zero - the CRC is correct, 0 - the check has been failed
  */
 static inline int s_modbus_crc_correct (
 		unsigned char *a_frame,

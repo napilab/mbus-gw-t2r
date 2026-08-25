@@ -16,6 +16,15 @@
 #				(docs/UserGuide_EN.pdf, docs/UserGuide_RU.pdf, the generator is
 #				docs/make_userguide_pdf.py); both are installed with the docs.
 #
+#	25-AUG-2026	RRL	X.00-08: The musl C library builds are supported: added the toolchain file
+#				cmake/musl.cmake (the kernel headers are appended by -idirafter, so the
+#				musl ones always win); the library directory reported by pkg-config is
+#				given to the linker explicitly - a libconfig installed to a non-standard
+#				prefix was not found at the link time.
+#
+#	25-AUG-2026	RRL	X.00-07ECO04: README is delivered in two languages (README.md +
+#				README_RU.md), both are installed with the docs.
+#
 #	25-AUG-2026	RRL	X.00-06: The bilingual (EN + RU) User Guide is installed with the docs.
 #
 #	25-AUG-2026	RRL	X.00-05ECO01: Removed the obsolete modbus-t2r_startup.sh (referenced the
@@ -51,6 +60,13 @@ set ( CMAKE_COLOR_MAKEFILE   ON )
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBCONFIG REQUIRED libconfig)
+
+#
+#   LIBCONFIG_LIBRARIES holds the bare "-lconfig" name, so the library directory reported by
+#   pkg-config must be given to the linker explicitly - otherwise a libconfig installed to a
+#   non-standard prefix (a musl sysroot, /opt/...) is not found at the link time.
+#
+link_directories(${LIBCONFIG_LIBRARY_DIRS})
 
 
 find_package(StarLet REQUIRED)						# The installed UTILITY$ROUTINES package,
@@ -127,6 +143,7 @@ install (TARGETS ${T2R_TARGET}
 
 install (FILES
 	README.md
+	README_RU.md
 	BLOCKNOTE.md
 	modbus-t2r.conf
 	modbus-t2r_settings.conf

@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MODBUS"
-#define	__IDENT__	"X.00-04ECO02"
-#define	__REV__		"00.04.02"
+#define	__IDENT__	"X.00-08ECO01"
+#define	__REV__		"00.08.01"
 
 /*
 **++
@@ -30,6 +30,9 @@
 **	25-AUG-2026	RRL	X.00-04ECO02 / REV: 00.04.02 - Commenting only, no functional change:
 **				every routine has been supplied by the standard DESCRIPTION/INPUTS/
 **				OUTPUTS/RETURNS header block with the detailed parameters description.
+**
+**	25-AUG-2026	RRL	X.00-08ECO01 / REV: 00.08.01 - The dump length is clipped by the library
+**				$MIN() macro instead of the hand written ternary chains.
 **
 **--
 */
@@ -217,9 +220,8 @@ char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len 
 	 * <l_len> is taken from the wire, so it is not trusted: the dump length is limited both by
 	 * the amount of the data we really have and by the capacity of the output buffer.
 	 */
-	l_dumplen = a_datalen - MODBUS$SZ_MBAPHDR;
-	l_dumplen = (l_dumplen > l_len) ? l_len : l_dumplen;
-	l_dumplen = (l_dumplen > MODBUS$SZ_MAXPDU) ? MODBUS$SZ_MAXPDU : l_dumplen;
+	l_dumplen = $MIN(a_datalen - MODBUS$SZ_MBAPHDR, l_len);
+	l_dumplen = $MIN(l_dumplen, MODBUS$SZ_MAXPDU);
 
 	__util$bin2hex (l_pdu, l_buf, l_dumplen);
 
@@ -299,7 +301,7 @@ char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len 
 		l_crc_check = s_modbus_crc_calculate (l_data, a_datalen - 2);
 		}
 
-	l_dumplen = (a_datalen > MODBUS$SZ_MAXPDU) ? MODBUS$SZ_MAXPDU : a_datalen;
+	l_dumplen = $MIN(a_datalen, MODBUS$SZ_MAXPDU);
 
 	__util$bin2hex (l_data, l_buf, l_dumplen);
 

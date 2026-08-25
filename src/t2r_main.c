@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-07ECO02"
-#define	__REV__		"00.07.02"
+#define	__IDENT__	"X.00-08ECO01"
+#define	__REV__		"00.08.01"
 
 /*
 **++
@@ -84,6 +84,21 @@
 **				README positions the project as an alternative to mbusd for the high
 **				efficiency at a lower resource consumption case.
 **
+**	25-AUG-2026	RRL	X.00-07ECO03 / REV: 00.07.03 - The delivery change (no C source change):
+**				README gained the "Who this project is for" section.
+**
+**	25-AUG-2026	RRL	X.00-07ECO04 / REV: 00.07.04 - The delivery change (no C source change):
+**				README is delivered in two languages: README.md + README_RU.md.
+**
+**	25-AUG-2026	RRL	X.00-08 / REV: 00.08.00 - The build system change (no C source change):
+**				the musl C library builds are supported and verified - added the toolchain
+**				file cmake/musl.cmake, fixed the linking against a libconfig which lives in
+**				a non-standard prefix; the musl build is documented in the both READMEs.
+**
+**	25-AUG-2026	RRL	X.00-08ECO01 / REV: 00.08.01 - Use the StarLet library facilities where the
+**				code was doing the same by hand: $ISINRANGE() for the range validation,
+**				$ARRSZ() for the message catalogue size, $MIN() for the dump clipping.
+**
 **--
 */
 
@@ -137,7 +152,7 @@ static	EMSG_RECORD __t2r_msgs__ [] = {					/* Create array of message records */
 static	EMSG_RECORD_DESC __t2r_msgs_desc__  = {
 	.link = NULL,							/* Must beee NULL here */
 	.facno = T2R,
-	.msgnr = sizeof(__t2r_msgs__) / sizeof(__t2r_msgs__[0]),
+	.msgnr = $ARRSZ(__t2r_msgs__),
 	.msgrec = __t2r_msgs__,					/* An address of the message records array */
 	.facname = "T2R"					/* The %T2R-<S>- framing of __util$putmsg*() */
 };
@@ -325,21 +340,21 @@ char	l_chars[64];
 		/*
 		 * Validate the line parameters BEFORE any arithmetic: <l_speed> is a divisor below.
 		 */
-		if ( (T2R$K_BAUD_MIN > l_speed) || (T2R$K_BAUD_MAX < l_speed) )
+		if ( !$ISINRANGE(l_speed, T2R$K_BAUD_MIN, T2R$K_BAUD_MAX) )
 			{
 			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- speed %d baud is out of range [%d..%d]", i,
 				l_serial->devname, l_speed, T2R$K_BAUD_MIN, T2R$K_BAUD_MAX);
 			continue;
 			}
 
-		if ( (T2R$K_DATABITS_MIN > l_databits) || (T2R$K_DATABITS_MAX < l_databits) )
+		if ( !$ISINRANGE(l_databits, T2R$K_DATABITS_MIN, T2R$K_DATABITS_MAX) )
 			{
 			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- %d data bits is out of range [%d..%d]", i,
 				l_serial->devname, l_databits, T2R$K_DATABITS_MIN, T2R$K_DATABITS_MAX);
 			continue;
 			}
 
-		if ( (T2R$K_STOPBITS_MIN > l_stopbits) || (T2R$K_STOPBITS_MAX < l_stopbits) )
+		if ( !$ISINRANGE(l_stopbits, T2R$K_STOPBITS_MIN, T2R$K_STOPBITS_MAX) )
 			{
 			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- %d stop bits is out of range [%d..%d]", i,
 				l_serial->devname, l_stopbits, T2R$K_STOPBITS_MIN, T2R$K_STOPBITS_MAX);
@@ -524,7 +539,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 				continue;
 			}
 
-		if ( (T2R$K_PORT_MIN > (l_port_nr = atoi(l_port))) || (T2R$K_PORT_MAX < l_port_nr) )
+		if ( !$ISINRANGE((l_port_nr = atoi(l_port)), T2R$K_PORT_MIN, T2R$K_PORT_MAX) )
 			{
 			$LOG(STS$K_ERROR, "[listener #%02d] --- port number %d is out of range [%d..%d]", i,
 				l_port_nr, T2R$K_PORT_MIN, T2R$K_PORT_MAX);

@@ -1,4 +1,7 @@
 # MODBUS TCP to RTU gateway
+
+*[Русская версия: README_RU.md](README_RU.md)*
+
 A yet another gateway for MODBUS TCP to RTU (Limited Edition especialy for LAB240 and NaPiLab Teams)
 
 ###	NaPi World
@@ -91,6 +94,22 @@ independent serial lines are served in parallel, each at its own full speed.
 
 
 
+###	Who this project is for
+
+Beyond its direct duty, this project is offered as a piece of readable engineering. It can be
+recommended to students who are learning industrial programming: the whole thing is small
+enough to be read end to end in an evening, yet it is a real production tool --- the serial line
+disciplines, the poll() driven event loops, the ring buffers, the configuration validation, the
+coded diagnostics and the graceful shutdown are all here, in their natural habitat rather than
+in a textbook exercise.
+
+It is also offered to the experienced programmers who have not yet forgotten the engineering
+culture of the Digital Equipment Corporation universe: the module headers with the IDENT/REV
+pair and the revision history, the condition codes checked on the low bit, the facility-coded
+messages, the FAO-styled logging, the routines which return a status and deliver their values
+through the output parameters. If that list reads like a homecoming rather than an oddity ---
+this code was written for you.
+
 ### 	Installation
 
 The gateway depends on two packages: **libconfig** (a settings file parser, is taken from the
@@ -132,6 +151,26 @@ $ make -s
 
 Build types: `Release` (production), `Debug` (symbols, tracing), `Asan` (address/UB sanitizers
 for the development).
+
+####	Building against musl (OpenWrt, Alpine, embedded rootfs)
+
+The gateway builds and runs against the **musl** C library as well --- this is the usual case
+for OpenWrt and Alpine based images on the industrial boards. A toolchain file is bundled:
+
+```
+$ cmake ../ -DCMAKE_TOOLCHAIN_FILE=../cmake/musl.cmake -DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_PREFIX_PATH=<musl prefix>
+$ make -s
+```
+
+The dependencies (StarLet and libconfig) have to be built for musl too and installed into that
+prefix; point `PKG_CONFIG_LIBDIR` at its `lib/pkgconfig` so that the musl libconfig is picked up
+instead of the host one.
+
+One musl specific detail, handled by the toolchain file: musl ships its own headers but not the
+kernel ones (`linux/serial.h`, `asm/ioctls.h`), so the kernel header directories are appended
+with `-idirafter` --- this way the musl headers always win and `/usr/include` is consulted only
+for what musl does not provide. A plain `-I` would poison the build with the glibc headers.
 
 ####	Step 4. Install the gateway
 

@@ -219,6 +219,20 @@ $ sudo make uninstall
 Everything which has been put by `make install` is removed, except the configuration files
 under `/opt/mbusgw-t2r/etc/` - the has been tuned working configuration always survives.
 
+####	Automatic build (GitLab CI)
+
+The file `.gitlab-ci.yml` builds the gateway on every push to the GitLab repository. It does the
+same steps as above, in the `gcc` Docker image:
+
+1. installs `cmake`, `pkg-config` and `libconfig-dev`;
+2. clones StarLet from `https://gitlab.com/SysMan-One/utility_routines.git`, builds it and installs it
+   into `/usr/local` (the variable `STARLET_REPO` holds the address - change it to use a mirror);
+3. builds the gateway in the `build/` directory (Debug).
+
+The job only checks that the code compiles: it does not install the gateway and does not keep the
+binary. If the job fails at the StarLet step, check that the StarLet repository can be reached from
+the runner.
+
 ### 	User Guide
 
 A detailed, beginner-level guide --- configuration walk-through, running, the Time Stamp

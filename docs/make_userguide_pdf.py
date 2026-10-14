@@ -45,7 +45,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-09'
+VERSION   = 'X.00-10'
 PUBDATE_EN = 'August 2026'
 PUBDATE_RU = 'Август 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -594,6 +594,13 @@ def s_pack_en ():
 			('%T2R-E-BADFRAME, ...', 'Something arrived, but it is not a sane MODBUS frame: usually '
 				'the same causes as CRC16ERR; 400+ octets of garbage mean a foreign, non-MODBUS '
 				'device on the line.'),
+			('CRC16ERR / BADFRAME now and then, on an FTDI USB adapter only', 'The adapter gives the '
+				'answer by pieces, once in 16 msec (latency_timer). Since X.00-10 the gateway waits '
+				'for the whole answer of the functions 01-06, 15, 16, 23; the others are still cut. '
+				'Set latency_timer to 1 msec (the answers get faster too): copy /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules '
+				'to /etc/udev/rules.d/, run sudo udevadm control --reload &amp;&amp; sudo udevadm '
+				'trigger --subsystem-match=usb-serial; cat /sys/bus/usb-serial/devices/ttyUSB0/'
+				'latency_timer must print 1.'),
 			('%T2R-W-FRAMETMO, ...', 'The answer started but never finished: a very slow or hanging '
 				'device. Raise iotmo; check the cable.'),
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'The gateway told the client "the serial '
@@ -867,6 +874,13 @@ def s_pack_ru ():
 			('%T2R-E-BADFRAME, ...', 'Что-то пришло, но это не осмысленный MODBUS-кадр: обычно '
 				'те же причины, что у CRC16ERR; 400+ октетов мусора — на линии чужое, '
 				'не-MODBUS устройство.'),
+			('CRC16ERR / BADFRAME время от времени, только на USB-адаптере FTDI', 'Адаптер отдаёт '
+				'ответ кусками, раз в 16 мс (latency_timer). С X.00-10 шлюз дожидается всего ответа '
+				'для функций 01-06, 15, 16, 23; остальные по-прежнему обрезаются. Поставьте '
+				'latency_timer в 1 мс (ответы заодно станут быстрее): скопируйте /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules '
+				'в /etc/udev/rules.d/, выполните sudo udevadm control --reload &amp;&amp; sudo udevadm '
+				'trigger --subsystem-match=usb-serial; cat /sys/bus/usb-serial/devices/ttyUSB0/'
+				'latency_timer должна напечатать 1.'),
 			('%T2R-W-FRAMETMO, ...', 'Ответ начался, но не завершился: очень медленное или '
 				'зависшее устройство. Увеличьте iotmo; проверьте кабель.'),
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'Шлюз сообщил клиенту «на '

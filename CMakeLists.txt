@@ -44,6 +44,9 @@
 #				/etc/opt/<prefix>/. Fixed the doubled DESTDIR in the configuration
 #				files path (file (INSTALL) prepends DESTDIR by itself).
 #
+#	14-OCT-2026	RRL	X.00-10: contrib/99-ftdi-latency.rules (the FTDI latency_timer = 1 msec udev
+#				rule) is installed with the docs.
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
@@ -152,7 +155,8 @@ target_link_libraries( ${T2R_TARGET} StarLet::starlet pthread rt ${LIBCONFIG_LIB
 #	Installation:	sbin/mbusgw-t2r
 #			etc/mbusgw-t2r/*.conf	- the existing configuration files are never overwritten
 #						  (etc/*.conf under /opt/: the tree is self-contained)
-#			share/doc/mbusgw-t2r/	- README, BLOCKNOTE, the reference copies of the configs
+#			share/doc/mbusgw-t2r/	- README, BLOCKNOTE, the reference copies of the configs,
+#						  the FTDI udev rule
 #
 if (CMAKE_INSTALL_PREFIX MATCHES "^/opt/")
 	set (T2R_CONFDIR "${CMAKE_INSTALL_PREFIX}/etc")
@@ -174,6 +178,7 @@ install (FILES
 	docs/UserGuide_RU.md
 	docs/UserGuide_EN.pdf
 	docs/UserGuide_RU.pdf
+	contrib/99-ftdi-latency.rules
 	DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 

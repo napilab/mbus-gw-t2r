@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-TTY"
-#define	__IDENT__	"X.00-06"
-#define	__REV__		"00.06.00"
+#define	__IDENT__	"X.00-10"
+#define	__REV__		"00.10.00"
 
 /*
 **++
@@ -42,6 +42,12 @@
 **	25-AUG-2026	RRL	X.00-06 / REV: 00.06.00 - The critical (for the operational troubleshooting)
 **				diagnostics are signalled via $PUTMSG_FAO by the coded catalogue messages
 **				now: DEVOPNERR, NOANSWER, FRAMETMO, BADFRAME, CRC16ERR, EXCRPT.
+**
+**	14-OCT-2026	RRL	X.00-10 / REV: 00.10.00 - s_tty_rtu_rx(): the end of the answer is detected by
+**				its expected length (s_rtu_resp_len(): FC01-06, 0F, 10, 17 and the exception
+**				answer), t3.5 is used for the other functions only: the USB-to-serial
+**				adapters (FTDI) deliver the answer by chunks with gaps up to 16 msec, the
+**				frame was cut by the t3.5 silence - CRC16ERR, BADFRAME.
 **
 **--
 */
@@ -230,13 +236,79 @@ struct timespec l_inter_pdu_ts;
 
 
 /*
+ *   DESCRIPTION: Compute a length of the RTU answer (with the CRC16 trailer) which is expected to
+ *	the given request. The length is known in advance for the most used functions; for the rest
+ *	of them the end of the frame is detected by the t3.5 silent interval only.
+ *
+ *   INPUTS:
+ *	a_req_pdu:	A descriptor of the request PDU: slave, function code, start address, quantity
+ *
+ *   OUTPUTS:
+ *	a_len:		A length of the normal (not an exception) answer in octets, CRC16 is included
+ *
+ *   RETURNS:
+ *	STS$K_SUCCESS	- the length is known
+ *	STS$K_WARN	- the length cannot be predicted, use the t3.5 criteria
+ */
+static int	s_rtu_resp_len (
+	const T2R$_DESC	*a_req_pdu,
+		int	*a_len
+		)
+{
+const MODBUS_REQ_T	*l_req = (const MODBUS_REQ_T *) a_req_pdu->data;
+int	l_qty;
+
+	*a_len = 0;
+
+	if ( a_req_pdu->len < (int) (sizeof(MODBUS_REQ_T)) )			/* slave + fncode + sa + qty */
+		return	STS$K_WARN;
+
+	l_qty = ntohs(l_req->qty);
+
+	switch ( l_req->fncode )
+		{
+		case	MODBUS$K_FN_READ_COILS:					/* slave + fncode + bc + bits + CRC16 */
+		case	MODBUS$K_FN_READ_DISCRETE_INPUTS:
+			*a_len = MODBUS$SZ_PDUHDR + (l_qty + 7) / 8 + 2;
+			break;
+
+		case	MODBUS$K_FN_READ_HOLDING_REGISTERS:			/* slave + fncode + bc + words + CRC16 */
+		case	MODBUS$K_FN_READ_INPUT_REGISTERS:
+		case	MODBUS$K_FN_READ_WRITE_MULTIPLE_REGISTERS:		/* qty is the read quantity here */
+			*a_len = MODBUS$SZ_PDUHDR + 2 * l_qty + 2;
+			break;
+
+		case	MODBUS$K_FN_WRITE_SINGLE_COIL:				/* An echo: slave + fncode + sa + qty/value + CRC16 */
+		case	MODBUS$K_FN_WRITE_SINGLE_REGISTER:
+		case	MODBUS$K_FN_WRITE_MULTIPLE_COILS:
+		case	MODBUS$K_FN_WRITE_MULTIPLE_REGISTERS:
+			*a_len = (int) sizeof(MODBUS_REQ_T) + 2;
+			break;
+
+		default:
+			return	STS$K_WARN;
+		}
+
+	if ( (*a_len < MODBUS$SZ_MINRTU) || (*a_len > MODBUS$SZ_MAXPDU) )	/* A senseless quantity - let the t3.5 decide */
+		return	*a_len = 0, STS$K_WARN;
+
+	return	STS$K_SUCCESS;
+}
+
+
+
+/*
  *   DESCRIPTION: Read a whole RTU frame from the serial line, check a framing and the CRC16.
  *
  *	1. Wait for a first octet of the answer by using a long timeout: a target device is allowed
  *	   to take a time to process the request.
- *	2. Accumulate octets until the line keeps silence for the t3.5 interval - this is the
- *	   end-of-frame criteria of the MODBUS over Serial Line specification. The interval is
- *	   restarted on every successfully read chunk of the data.
+ *	2. Accumulate octets until the expected length of the answer is collected (see
+ *	   s_rtu_resp_len(); an exception answer is always 5 octets) - the USB-to-serial adapters
+ *	   (FTDI: latency_timer = 16 msec by default) deliver the answer by chunks with the gaps
+ *	   which are much longer than t3.5, so the silence must not cut the frame.
+ *	   When the length cannot be predicted - until the line keeps silence for the t3.5
+ *	   interval, the end-of-frame criteria of the MODBUS over Serial Line specification. The
+ *	   interval is restarted on every successfully read chunk of the data.
  *	3. A whole frame must be collected within the answer timeout, otherwise the frame is
  *	   considered as a broken one.
  *
@@ -256,7 +328,7 @@ static int	s_tty_rtu_rx (
 		T2R$_DESC	*a_resp_pdu
 		)
 {
-int	l_rc, l_tmo_msec, l_space;
+int	l_rc, l_tmo_msec, l_space, l_explen, l_normlen;
 uint16_t	l_crc, l_crc_rcvd;
 struct pollfd	l_pfd = {.fd = a_serial->fd, .events = POLLIN};
 struct timespec	l_now_ts, l_silence_ts, l_deadline_ts;
@@ -264,6 +336,9 @@ MODBUS_PDU_T	*l_req_pdu, *l_resp_pdu;
 uint8_t	*l_data;
 
 	a_resp_pdu->len = 0;
+
+	s_rtu_resp_len (a_req_pdu, &l_normlen);					/* 0 - unknown, use t3.5 */
+	l_explen = l_normlen;
 
 	/*
 	 * Wait for a first octet of the answer
@@ -297,7 +372,10 @@ uint8_t	*l_data;
 		{
 		clock_gettime(CLOCK_MONOTONIC, &l_now_ts);
 
-		if ( a_resp_pdu->len && (0 < __util$cmp_time (&l_now_ts, &l_silence_ts)) )
+		if ( l_explen && (a_resp_pdu->len >= l_explen) )
+			break;							/* The expected length is collected */
+
+		if ( !l_explen && a_resp_pdu->len && (0 < __util$cmp_time (&l_now_ts, &l_silence_ts)) )
 			break;							/* t3.5 of silence - the frame is complete */
 
 		if ( 0 < __util$cmp_time (&l_now_ts, &l_deadline_ts) )
@@ -342,9 +420,16 @@ uint8_t	*l_data;
 
 		a_resp_pdu->len += l_rc;					/* Adjust data counter in the input buffer */
 
+		if ( l_normlen && (a_resp_pdu->len >= 2) )			/* An exception answer is shorter */
+			l_explen = (((MODBUS_PDU_T *) a_resp_pdu->data)->fncode & MODBUS$M_FN_EXCEPTION)
+				? (int) sizeof(MODBUS_EXC_T) + 2 : l_normlen;
+
 		clock_gettime(CLOCK_MONOTONIC, &l_now_ts);			/* Restart the t3.5 silent interval */
 		__util$add_time (&l_now_ts, &a_serial->inter_pdu_ts, &l_silence_ts);
 		}
+
+	if ( l_explen && (a_resp_pdu->len > l_explen) )				/* A trailing garbage in the last chunk - the */
+		a_resp_pdu->len = l_explen;					/* input is flushed before the next request */
 
 	/*
 	 * Validate a framing of the has been received data

@@ -193,6 +193,11 @@ $ sudo make install
 файлы конфигурации — в `/usr/local/etc/mbusgw-t2r/`, документация — в
 `/usr/local/share/doc/mbusgw-t2r/`.
 
+**USB-адаптеры FTDI** (FT232/FT2232/FT4232): поставьте правило udev, которое выставляет им
+`latency_timer` в 1 мс --- ответы приходят быстрее и никогда не обрезаются:
+`sudo cp /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules /etc/udev/rules.d/` (подробности
+в самом файле правила и в руководстве пользователя, раздел *Траблшутинг*).
+
 ####	Шаг 5. Настроить и запустить
 
 ```

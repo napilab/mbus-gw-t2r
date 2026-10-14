@@ -195,6 +195,11 @@ elsewhere give the prefix at the Step 3: `cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/
 the binary then goes to `/usr/local/sbin/`, the configuration files to
 `/usr/local/etc/mbusgw-t2r/`, the docs to `/usr/local/share/doc/mbusgw-t2r/`.
 
+**USB-to-serial adapters FTDI** (FT232/FT2232/FT4232): install the udev rule which sets their
+`latency_timer` to 1 msec --- the answers get faster and are never cut:
+`sudo cp /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules /etc/udev/rules.d/` (the details
+are in the rule file and in the User Guide, *Troubleshooting*).
+
 ####	Step 5. Tune the configuration and run
 
 ```

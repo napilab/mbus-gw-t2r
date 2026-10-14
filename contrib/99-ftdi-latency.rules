@@ -1,0 +1,10 @@
+#
+#  mbusgw-t2r: the FTDI USB-to-serial adapters (FT232/FT2232/FT4232...) hold the received octets
+#  up to latency_timer msec (16 by default) and deliver the MODBUS RTU answer by chunks. Set it to
+#  1 msec: the answers come faster and the functions which are framed by t3.5 only are not cut.
+#
+#  Install:	sudo cp 99-ftdi-latency.rules /etc/udev/rules.d/
+#		sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb-serial
+#  Check:	cat /sys/bus/usb-serial/devices/ttyUSB0/latency_timer	-> 1
+#
+ACTION=="add", SUBSYSTEM=="usb-serial", DRIVER=="ftdi_sio", ATTR{latency_timer}="1"

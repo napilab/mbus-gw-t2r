@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-09"
-#define	__REV__		"00.09.00"
+#define	__IDENT__	"X.00-10"
+#define	__REV__		"00.10.00"
 
 /*
 **++
@@ -103,6 +103,11 @@
 **				default installation prefix is /opt/mbusgw-t2r (sbin/, etc/,
 **				share/doc/mbusgw-t2r/); the docs and the User Guides follow the new layout.
 **				The "peer close connection" is logged as -I- (see T2R-NET).
+**
+**	14-OCT-2026	RRL	X.00-10 / REV: 00.10.00 - The RTU answer is framed by its expected length (see
+**				T2R-TTY): the FTDI USB adapters do not cut the answers anymore; the udev rule
+**				contrib/99-ftdi-latency.rules is delivered, the User Guides got the FTDI line
+**				in the Troubleshooting.
 **
 **--
 */

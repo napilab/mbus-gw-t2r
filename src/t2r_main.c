@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-11"
-#define	__REV__		"00.11.00"
+#define	__IDENT__	"X.00-12"
+#define	__REV__		"00.12.00"
 
 /*
 **++
@@ -115,6 +115,11 @@
 **				the "Time Stamp responder ... disabled" is -I- now (it is the default);
 **				the message records are initialized by the field names (no warnings with
 **				any StarLet release, whatever the set of the EMSG_RECORD fields is).
+**
+**	14-OCT-2026	RRL	X.00-12 / REV: 00.12.00 - <connlm> is a real limit of the simultaneous sessions
+**				of a listener (default 32, 1..512), the new <idletmo> listener option is the
+**				idle session timeout in seconds (default 60, 1..86400; was 1200 hardcoded);
+**				both are validated (LSNOPTRNG), LSNADDED shows them.
 **--
 */
 
@@ -563,8 +568,31 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 		if ( config_setting_lookup_int(l_args, "iotmo", &l_int) )
 			l_listener->iotmo = l_int;
+
+		l_listener->connlm = T2R$K_CONNLM_DEF;					/* Both are optional */
+		l_listener->idletmo = T2R$K_IDLETMO_DEF;
+
 		if ( config_setting_lookup_int(l_args, "connlm", &l_int) )
+			{
+			if ( !$ISINRANGE(l_int, T2R$K_CONNLM_MIN, T2R$K_CONNLM_MAX) )
+				{
+				$PUTMSG_FAO(T2R$__LSNOPTRNG, i, "connlm", l_int, T2R$K_CONNLM_MIN, T2R$K_CONNLM_MAX);
+				continue;
+				}
+
 			l_listener->connlm = l_int;
+			}
+
+		if ( config_setting_lookup_int(l_args, "idletmo", &l_int) )
+			{
+			if ( !$ISINRANGE(l_int, T2R$K_IDLETMO_MIN, T2R$K_IDLETMO_MAX) )
+				{
+				$PUTMSG_FAO(T2R$__LSNOPTRNG, i, "idletmo", l_int, T2R$K_IDLETMO_MIN, T2R$K_IDLETMO_MAX);
+				continue;
+				}
+
+			l_listener->idletmo = l_int;
+			}
 
 		if ( !config_setting_lookup_string(l_args, "target", &l_str) )
 			{
@@ -582,7 +610,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 
 		$PUTMSG_FAO(T2R$__LSNADDED, i, l_listener->serial->devname, (l_listener->proto == IPPROTO_UDP) ? "UDP": "TCP",
-			&l_listener->sk.sin_addr, ntohs(l_listener->sk.sin_port), l_listener->iotmo, l_listener->connlm);
+			&l_listener->sk.sin_addr, ntohs(l_listener->sk.sin_port), l_listener->connlm, l_listener->idletmo);
 
 
 		l_listener++;

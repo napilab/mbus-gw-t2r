@@ -22,6 +22,11 @@
 **	25-AUG-2026	RRL	X.00-04ECO01 / REV: 00.04.01 - Added T2R$K_BAUD_/DATABITS_/STOPBITS_/PORT_
 **				MIN/MAX limit constants for validation of the configurable parameters.
 **
+**	14-OCT-2026	RRL	X.00-12 / REV: 00.12.00 - T2R$K_IDLE_TMO_SEC is replaced by T2R$K_IDLETMO_*
+**				(<idletmo>), added T2R$K_CONNLM_* (<connlm>) and T2R$K_LISTEN_BACKLOG;
+**				T2R$_LISTENER got .idletmo and the .sessions counter, T2R$_SESSION - the
+**				back link .listener.
+**
 **--
 */
 
@@ -78,7 +83,13 @@ enum {
 #define		T2R$SZ_BUFF	2048
 #define		T2R$K_MAX_LISTENERS	128
 #define		T2R$K_MAX_SERIALS	128
-#define		T2R$K_IDLE_TMO_SEC	1200				/* Global timeout for idle sessions */
+#define		T2R$K_IDLETMO_DEF	60				/* Idle session timeout, seconds: <idletmo>	*/
+#define		T2R$K_IDLETMO_MIN	1
+#define		T2R$K_IDLETMO_MAX	86400
+#define		T2R$K_CONNLM_DEF	32				/* Sessions per listener: <connlm>		*/
+#define		T2R$K_CONNLM_MIN	1
+#define		T2R$K_CONNLM_MAX	512
+#define		T2R$K_LISTEN_BACKLOG	64				/* listen() queue of not yet accepted connections */
 #define		T2R$K_NET_TMO_SEC	300				/* A timeout for reading data from network socket */
 #define		T2R$K_ANSTMO_MSEC	1000				/* A default timeout to wait an answer on the RTU leg */
 
@@ -157,7 +168,9 @@ typedef struct	t2r$_listener {
 		int	fd,						/* Network socket descriptor */
 			proto,						/* IPPROTO_TCP or IPPROTO_UDP */
 			iotmo,
-			connlm;						/* Connection limit on this listener */
+			connlm,						/* Connection limit on this listener */
+			idletmo,					/* Idle session timeout, seconds */
+			sessions;					/* Active sessions, __atomic_*() only */
 	struct sockaddr_in sk;						/* Socket address structure: TCP, 0.0.0.0:502 */
 		char target[T2R$K_TTY_DEVNAME + 1];			/* "COM1", "/dev/ttyS0" */
 
@@ -182,6 +195,7 @@ typedef struct	t2r$__session {
 
 
 	T2R$_SERIAL	*target;
+	T2R$_LISTENER	*listener;					/* The listener which has accepted the session */
 } T2R$_SESSION;
 
 

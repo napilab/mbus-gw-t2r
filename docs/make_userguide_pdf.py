@@ -45,7 +45,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-11'
+VERSION   = 'X.00-12'
 PUBDATE_EN = 'August 2026'
 PUBDATE_RU = 'Август 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -511,8 +511,11 @@ def s_pack_en ():
 				'0.0.0.0 means every interface. UDP is not supported.'),
 			('target', 'yes', 'Which serial port to forward to. Must match a device from serials '
 				'exactly, character by character.'),
-			('connlm', 'no', 'How many TCP clients may wait in the connection queue, e.g. 8.'),
-			('iotmo', 'no', 'The network I/O timeout, milliseconds.'),
+			('connlm', 'no', 'How many TCP clients may be connected to this port at the same time; one more is '
+				'disconnected at once (CONNLIMIT). Default 32, range 1..512.'),
+			('idletmo', 'no', 'A client which sends nothing for this many seconds is disconnected (IDLETMO). '
+				'Default 60, range 1..86400.'),
+			('iotmo', 'no', 'Reserved, not used yet.'),
 		 ], [30*mm, 18*mm, 115*mm], a_mono_cols=(0,)),
 		 P('Port <b>502</b> is the standard MODBUS TCP port, but on Linux the ports below 1024 '
 		   'need the root privileges. If you do not want to run as root, take e.g. '
@@ -605,6 +608,10 @@ def s_pack_en ():
 				'device. Raise iotmo; check the cable.'),
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'The gateway told the client "the serial '
 				'side failed". The real reason is in the previous log line (NOANSWER, CRC16ERR ...).'),
+			('%T2R-W-CONNLIMIT, ...', 'The port already has connlm clients. If they are all real, raise '
+				'connlm of this listener; otherwise find who keeps the connections: ss -tn.'),
+			('%T2R-W-IDLETMO, ...', 'A client has sent nothing for idletmo seconds. Normal for a client which '
+				'polls rarely --- it reconnects; to keep the connection, raise idletmo.'),
 			('%T2R-E-SESSFAIL, ... pthread_create()->11', 'Too many TCP clients at once: every client takes a thread, '
 				'and systemd limits the service (TasksMax, 578 on a small board). Find who keeps so many '
 				'connections (ss -tn); if they are all real, set TasksMax=2048 in the [Service] section '
@@ -655,7 +662,7 @@ def s_pack_en ():
 			('BADPROTO', 'E', 'A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed.'),
 			('PDUSHORT', 'E', 'A TCP request is too short to be a MODBUS request; the connection is closed.'),
 			('PDULONG', 'E', 'A TCP request is longer than 256 octets; the connection is closed.'),
-			('IDLETMO', 'W', 'A TCP client has been silent for 20 minutes; the connection is closed.'),
+			('IDLETMO', 'W', 'A TCP client has been silent for idletmo seconds (60 by default); the connection is closed.'),
 			('NETRDTMO', 'E', 'A TCP client started a request but did not finish it in time; the connection is closed.'),
 			('REQFAIL', 'W', 'A request is answered with a MODBUS exception; the previous lines say why.'),
 			('NETPOLLEV', 'E', 'A TCP connection broke (poll() reports an error); the connection is closed.'),
@@ -706,6 +713,8 @@ def s_pack_en ():
 			('DEVCLSERR', 'E', 'The serial port cannot be closed.'),
 			('DEVNOTINI', 'W', 'Closing a serial port which was never opened — harmless.'),
 			('DEVBUSY', 'E', 'The serial line cannot be taken for a request; the request gets exception 4.'),
+			('CONNLIMIT', 'W', 'A new TCP client is disconnected at once: the port already has connlm clients.'),
+			('LSNOPTRNG', 'E', 'A listeners option (connlm, idletmo) is out of range; the record is skipped.'),
 		 ], [26*mm, 10*mm, 127*mm], a_mono_cols=(0,)),
 		 H2('7.3.  If Nothing Helps'),
 		 P('Collect and attach to your question: 1) the full start-up log with /trace (from '
@@ -862,8 +871,11 @@ def s_pack_ru ():
 				'0.0.0.0 — все интерфейсы. UDP не поддерживается.'),
 			('target', 'да', 'На какой порт пересылать. Должен дословно, символ в символ, '
 				'совпадать с device из serials.'),
-			('connlm', 'нет', 'Сколько TCP-клиентов может ждать в очереди подключения, например 8.'),
-			('iotmo', 'нет', 'Сетевой таймаут ввода-вывода, миллисекунды.'),
+			('connlm', 'нет', 'Сколько TCP-клиентов может быть подключено к этому порту одновременно; лишний '
+				'сразу отключается (CONNLIMIT). По умолчанию 32, диапазон 1..512.'),
+			('idletmo', 'нет', 'Клиент, который ничего не присылает столько секунд, отключается (IDLETMO). '
+				'По умолчанию 60, диапазон 1..86400.'),
+			('iotmo', 'нет', 'Зарезервирован, пока не используется.'),
 		 ], [30*mm, 14*mm, 119*mm], a_mono_cols=(0,)),
 		 P('Порт <b>502</b> — стандартный порт MODBUS TCP, но в Linux порты ниже 1024 требуют '
 		   'прав root. Не хотите работать под root — возьмите, например, '
@@ -953,6 +965,10 @@ def s_pack_ru ():
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'Шлюз сообщил клиенту «на '
 				'последовательной стороне сбой». Настоящая причина — в предыдущей строке журнала '
 				'(NOANSWER, CRC16ERR ...).'),
+			('%T2R-W-CONNLIMIT, ...', 'К порту уже подключено connlm клиентов. Если все настоящие — увеличьте '
+				'connlm этого слушателя; иначе найдите, кто держит соединения: ss -tn.'),
+			('%T2R-W-IDLETMO, ...', 'Клиент ничего не присылал idletmo секунд. Нормально для клиента, который '
+				'опрашивает редко — он переподключится; чтобы держать соединение, увеличьте idletmo.'),
 			('%T2R-E-SESSFAIL, ... pthread_create()->11', 'Слишком много TCP-клиентов сразу: каждому нужен поток, '
 				'а systemd ограничивает сервис (TasksMax, на маленькой плате 578). Найдите, кто держит '
 				'столько соединений (ss -tn); если все настоящие — поставьте TasksMax=2048 в разделе '
@@ -998,7 +1014,7 @@ def s_pack_ru ():
 			('BADPROTO', 'E', 'У TCP-запроса ненулевой идентификатор протокола MBAP: клиент говорит не на MODBUS TCP; соединение закрывается.'),
 			('PDUSHORT', 'E', 'TCP-запрос слишком короткий для MODBUS; соединение закрывается.'),
 			('PDULONG', 'E', 'TCP-запрос длиннее 256 октетов; соединение закрывается.'),
-			('IDLETMO', 'W', 'TCP-клиент молчал 20 минут; соединение закрывается.'),
+			('IDLETMO', 'W', 'TCP-клиент молчал idletmo секунд (по умолчанию 60); соединение закрывается.'),
 			('NETRDTMO', 'E', 'TCP-клиент начал запрос, но не закончил его вовремя; соединение закрывается.'),
 			('REQFAIL', 'W', 'На запрос ответили исключением MODBUS; причина — в строках выше.'),
 			('NETPOLLEV', 'E', 'TCP-соединение оборвалось (poll() сообщает об ошибке); соединение закрывается.'),
@@ -1049,6 +1065,8 @@ def s_pack_ru ():
 			('DEVCLSERR', 'E', 'Последовательный порт не закрылся.'),
 			('DEVNOTINI', 'W', 'Закрытие порта, который не открывался — безвредно.'),
 			('DEVBUSY', 'E', 'Последовательную линию не удалось занять под запрос; запрос получает исключение 4.'),
+			('CONNLIMIT', 'W', 'Новый TCP-клиент сразу отключён: у порта уже connlm клиентов.'),
+			('LSNOPTRNG', 'E', 'Параметр listeners (connlm, idletmo) вне диапазона; запись пропускается.'),
 		 ], [26*mm, 11*mm, 126*mm], a_mono_cols=(0,)),
 		 H2('7.3.  Если ничего не помогло'),
 		 P('Соберите и приложите к вопросу: 1) полный журнал запуска с /trace (от REVISNF до '

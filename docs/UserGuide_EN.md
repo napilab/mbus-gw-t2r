@@ -97,8 +97,9 @@ The record number (`#00`) counts from zero, in the order the records appear in t
 |-----|-----------|---------------|----------------|
 | `bind` | **yes** | Where to listen: `TCP:<IP address>:<port>` | port 1..65535; `0.0.0.0` = all interfaces; UDP is not supported |
 | `target` | **yes** | Which serial port to forward to --- must match a `device` from `serials` **exactly** | |
-| `connlm` | no | How many TCP clients may wait in the connection queue | small number, e.g. 8 |
-| `iotmo` | no | The network I/O timeout, milliseconds | |
+| `connlm` | no | How many TCP clients may be connected to this port **at the same time**; one more is disconnected at once (`CONNLIMIT`). Default: 32 | 1..512 |
+| `idletmo` | no | A client which sends nothing for this many **seconds** is disconnected (`IDLETMO`). Default: 60 | 1..86400 |
+| `iotmo` | no | Reserved, not used yet | |
 
 Notes for the very beginning:
 
@@ -200,6 +201,8 @@ dislikes.**
 | `%T2R-W-FRAMETMO, [...] Frame is not completed in ...` | The answer started but never finished in time | a very slow or hanging device; raise `iotmo`; check the cable |
 | `CRC16ERR`, `BADFRAME` or `FRAMETMO` now and then, on a USB adapter (FTDI) only; a direct `mbpoll` on the same port is fine | The FTDI adapter gives the answer by pieces, once in 16 msec (its `latency_timer`). Since X.00-10 the gateway waits for the whole answer of the usual functions (01-06, 15, 16, 23), but the other functions are still cut | set `latency_timer` to 1 msec --- it also makes every answer faster: `sudo cp /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules /etc/udev/rules.d/`, then `sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb-serial`; check: `cat /sys/bus/usb-serial/devices/ttyUSB0/latency_timer` must print `1` |
 | `%T2R-W-EXCRPT, [...] Report exception 4 (SERVER_DEVICE_FAILURE) ...` | The gateway told the TCP client "the serial side failed" | look at the *previous* log line --- it names the real reason (NOANSWER, CRC16ERR, ...) |
+| `%T2R-W-CONNLIMIT, [...] --- the listener has reached its connection limit (N), reject` | The port already has `connlm` clients connected | if they are all real clients, raise `connlm` of this listener; otherwise find who keeps the connections open: `ss -tn` |
+| `%T2R-W-IDLETMO, [...] No activity for past N seconds (idletmo) --- close connection` | A client has sent nothing for `idletmo` seconds | normal for a client which polls rarely --- it reconnects; to keep the connection, raise `idletmo` of this listener |
 | `%T2R-E-SESSFAIL, [...] --- cannot start a session thread, pthread_create()->11` | Too many TCP clients at once: every client takes a thread, and systemd limits the service (`TasksMax`, 578 on a small board) | find who keeps so many connections open (`ss -tn`); if they are all real, raise the limit: `TasksMax=2048` in the `[Service]` section of the unit, then `systemctl daemon-reload` |
 | `%T2R-E-LSNRERR, Listener 0.0.0.0:502 --- bind() error, errno: 98` | errno 98 = the TCP port is already taken | another gateway instance is running, or another program owns the port: `sudo ss -tlnp \| grep 502` |
 | the same, `errno: 13` | Ports below 1024 need root | run with `sudo`, or use a port >= 1024 (e.g. 5502) |
@@ -237,7 +240,7 @@ dislikes.**
 | `BADPROTO` | E | A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed |
 | `PDUSHORT` | E | A TCP request is too short to be a MODBUS request; the connection is closed |
 | `PDULONG` | E | A TCP request is longer than 256 octets; the connection is closed |
-| `IDLETMO` | W | A TCP client has been silent for 20 minutes; the connection is closed |
+| `IDLETMO` | W | A TCP client has been silent for `idletmo` seconds (60 by default); the connection is closed |
 | `NETRDTMO` | E | A TCP client started a request but did not finish it in time; the connection is closed |
 | `REQFAIL` | W | A request is answered with a MODBUS exception; the previous lines say why |
 | `NETPOLLEV` | E | A TCP connection broke (poll() reports an error); the connection is closed |
@@ -288,6 +291,8 @@ dislikes.**
 | `DEVCLSERR` | E | The serial port cannot be closed |
 | `DEVNOTINI` | W | Closing a serial port which was never opened --- harmless |
 | `DEVBUSY` | E | The serial line cannot be taken for a request; the request gets exception 4 |
+| `CONNLIMIT` | W | A new TCP client is disconnected at once: the port already has `connlm` clients |
+| `LSNOPTRNG` | E | A listeners option (`connlm`, `idletmo`) is out of range; the record is skipped |
 
 *(The `S/I/W/E` letter is a part of the printed line: `%T2R-E-CRC16ERR, ...`.)*
 

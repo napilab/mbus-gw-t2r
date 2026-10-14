@@ -25,6 +25,9 @@
 **				EXITST, the old numbers are intact): every diagnostic of the gateway is a
 **				coded message now; the generic SYSERR/NETSYSxxx/TTYSYSxxx/DEVSYSxxx carry
 **				the failed call name as a parameter. A literal '!' is written as "!!".
+**
+**	14-OCT-2026	RRL	X.00-12 / REV: 00.12.00 - Added CONNLIMIT, LSNOPTRNG; LSNADDED shows <connlm>
+**				and <idletmo> (the unused <iotmo> is dropped), IDLETMO names <idletmo>.
 **--
 */
 
@@ -77,7 +80,7 @@ $DEF_MSG(T2R, WARN,	ALLSENT,			"[#!SL] --- all data has been sent (!UL octets)")
 $DEF_MSG(T2R, ERROR,	BADPROTO,		"[#!SL] --- unexpected MBAP protocol identifier !UL") \
 $DEF_MSG(T2R, ERROR,	PDUSHORT,		"[#!SL] --- MODBUS PDU is too short (!SL octets)") \
 $DEF_MSG(T2R, ERROR,	PDULONG,			"[#!SL] --- MODBUS PDU is too long (!SL > !UL octets)") \
-$DEF_MSG(T2R, WARN,	IDLETMO,			"[#!SL] No activity for past !UL seconds --- close connection") \
+$DEF_MSG(T2R, WARN,	IDLETMO,			"[#!SL] No activity for past !UL seconds (idletmo) --- close connection") \
 $DEF_MSG(T2R, ERROR,	NETRDTMO,		"[#!SL] No data read (!UL octets) in !UL seconds") \
 $DEF_MSG(T2R, WARN,	REQFAIL,			"[#!SL] Request processing failed --- MODBUS exception: !UL/!XB") \
 $DEF_MSG(T2R, ERROR,	NETPOLLEV,		"[#!SL] poll()->!SL, .revents: !XW, errno: !SL") \
@@ -106,7 +109,7 @@ $DEF_MSG(T2R, ERROR,	LSNBADBIND,		"[listener #!2ZL] --- <bind> value <!AZ> is il
 $DEF_MSG(T2R, ERROR,	LSNRANGE,		"[listener #!2ZL] --- port number !SL is out of range [!SL..!SL]") \
 $DEF_MSG(T2R, ERROR,	LSNBADADDR,		"[listener #!2ZL] --- inet_pton(<!AZ>)->!SL, errno: !SL") \
 $DEF_MSG(T2R, ERROR,	LSNNOTGT,		"[listener #!2ZL] --- target <!AZ> has not been defined in <serials> section") \
-$DEF_MSG(T2R, INFO,	LSNADDED,		"Added listener #!2ZL [Target: <!AZ>, Net: <!AZ:!%I:!UW>, I/O Tmo: !UL msec, Connection limit: !UL] --- added") \
+$DEF_MSG(T2R, INFO,	LSNADDED,		"Added listener #!2ZL [Target: <!AZ>, Net: <!AZ:!%I:!UW>, Connection limit: !UL, Idle tmo: !UL sec] --- added") \
 $DEF_MSG(T2R, ERROR,	NOLSNRS,			"No listeners has been defined!!") \
 $DEF_MSG(T2R, ERROR,	CFGPARSE,		"!AZ:!UL - !AZ, errno: !SL") \
 $DEF_MSG(T2R, ERROR,	SIGERR,			"Cannot establish handler for signal !UL, errno: !SL") \
@@ -128,6 +131,8 @@ $DEF_MSG(T2R, INFO,	DEVINIT,			"Device <!AZ> --- has been initialized") \
 $DEF_MSG(T2R, ERROR,	DEVCLSERR,		"[#!SL:<!AZ>] --- close failed") \
 $DEF_MSG(T2R, WARN,	DEVNOTINI,		"Device <!AZ> has not been initialized") \
 $DEF_MSG(T2R, ERROR,	DEVBUSY,			"[#!SL:<!AZ>] --- cannot be allocated for exclusive I/O") \
+$DEF_MSG(T2R, WARN,	CONNLIMIT,		"[#!SL] !%I:!UW --- the listener has reached its connection limit (!UL), reject") \
+$DEF_MSG(T2R, ERROR,	LSNOPTRNG,		"[listener #!2ZL] --- !AZ !SL is out of range [!SL..!SL]") \
 
 
 

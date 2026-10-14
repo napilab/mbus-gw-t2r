@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-11"
-#define	__REV__		"00.11.00"
+#define	__IDENT__	"X.00-12"
+#define	__REV__		"00.12.00"
 
 /*
 **++
@@ -48,6 +48,11 @@
 **	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only: every $LOG() is replaced by
 **				$PUTMSG_FAO() with a coded message (PEERCLOSE, NETSYSERR, SESSFAIL, ...);
 **				the dead commented-out $LOG() in s_net_recvn() is removed.
+**
+**	14-OCT-2026	RRL	X.00-12 / REV: 00.12.00 - <connlm>: the listener counts its sessions (atomic) and
+**				rejects one more at once (CONNLIMIT); listen() gets its own backlog
+**				T2R$K_LISTEN_BACKLOG (was <connlm>); the idle timeout is <idletmo> of the
+**				listener (was T2R$K_IDLE_TMO_SEC = 1200).
 **--
 */
 
@@ -322,9 +327,9 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 		if ( l_session->state == T2R$K_STATE_READY )				/* Check global session timeout for idle session */
 			{
-			if ( (l_session->lastio_ts.tv_sec + T2R$K_IDLE_TMO_SEC) < l_now.tv_sec)	/* 1200 secs for idle session */
+			if ( (l_session->lastio_ts.tv_sec + l_session->listener->idletmo) < l_now.tv_sec)	/* <idletmo> of the listener */
 				{
-				$PUTMSG_FAO(T2R$__IDLETMO, l_session->sd, T2R$K_IDLE_TMO_SEC);
+				$PUTMSG_FAO(T2R$__IDLETMO, l_session->sd, l_session->listener->idletmo);
 				break;
 				}
 			}
@@ -440,6 +445,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 
 	close(l_session->sd);
+	__atomic_sub_fetch(&l_session->listener->sessions, 1, __ATOMIC_RELEASE);	/* Free a slot of <connlm> */
 	free( (void *) l_session);
 
 	return	NULL;
@@ -508,6 +514,18 @@ pthread_t	l_tid;
 					$PUTMSG_FAO(T2R$__NETCONN, l_sd, &l_sk.sin_addr, ntohs(l_sk.sin_port),
 						s_pfd_lsnr[i].fd);
 
+					/*
+					 * <connlm> - a limit of the simultaneous sessions of the listener. Only this
+					 * thread does increment the counter, so the check-then-increment is safe;
+					 * the sessions do decrement it at their exit.
+					 */
+					if ( g_listeners[i].connlm <= __atomic_load_n(&g_listeners[i].sessions, __ATOMIC_ACQUIRE) )
+						{
+						$PUTMSG_FAO(T2R$__CONNLIMIT, l_sd, &l_sk.sin_addr, ntohs(l_sk.sin_port), g_listeners[i].connlm);
+						close(l_sd);
+						continue;
+						}
+
 					if ( (l_rc = setsockopt(l_sd, IPPROTO_TCP, TCP_NODELAY, (char *) &s_one, sizeof(s_one))) )
 						$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(TCP_NODELAY)", l_rc, errno);
 
@@ -522,12 +540,16 @@ pthread_t	l_tid;
 					l_session->sd = l_sd;
 					l_session->sk = l_sk;
 					l_session->target = g_listeners[i].serial;
+					l_session->listener = &g_listeners[i];
+
+					__atomic_add_fetch(&g_listeners[i].sessions, 1, __ATOMIC_ACQ_REL);	/* Before the thread can exit */
 
 											/* Start dedicated thread for session */
 					if ( (l_rc = pthread_create(&l_tid, NULL, s_net_session, l_session)) )
 						{
 						$PUTMSG_FAO(T2R$__SESSFAIL, l_sd, &l_sk.sin_addr, ntohs(l_sk.sin_port), l_rc);
 						close(l_sd);
+						__atomic_sub_fetch(&g_listeners[i].sessions, 1, __ATOMIC_RELEASE);
 						free(l_session);
 						}
 					}
@@ -646,7 +668,7 @@ pthread_t	l_tid;
 			continue;
 			}
 
-		if ( 0 > (l_rc = listen(l_sd, l_listener->connlm)) )
+		if ( 0 > (l_rc = listen(l_sd, T2R$K_LISTEN_BACKLOG)) )
 			{
 			close(l_sd);
 			$PUTMSG_FAO(T2R$__LSNRERR, &l_listener->sk.sin_addr, ntohs(l_listener->sk.sin_port),

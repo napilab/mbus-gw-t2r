@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-12ECO03"
-#define	__REV__		"00.12.03"
+#define	__IDENT__	"X.00-13"
+#define	__REV__		"00.13.00"
 
 /*
 **++
@@ -132,6 +132,10 @@
 **
 **	14-OCT-2026	RRL	X.00-12ECO03 / REV: 00.12.03 - The delivery change (no C source change): the
 **				both READMEs describe the <listeners> keys, <connlm> and <idletmo> included.
+**
+**	14-OCT-2026	RRL	X.00-13 / REV: 00.13.00 - The release of the X.00-09..X.00-12ECO03 changes: the
+**				/opt layout, the FTDI framing, the FAO-only logging, <connlm>/<idletmo>,
+**				no SO_REUSEPORT; the package version is 0.13.0.
 **--
 */
 

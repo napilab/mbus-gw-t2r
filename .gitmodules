@@ -1,6 +1,0 @@
-[submodule "3rdparty/libconfig"]
-	path = 3rdparty/libconfig
-	url = https://github.com/SysMan-One/libconfig
-[submodule "3rdparty/utility_routines"]
-	path = 3rdparty/utility_routines
-	url = https://gitlab.com/SysMan-One/utility_routines

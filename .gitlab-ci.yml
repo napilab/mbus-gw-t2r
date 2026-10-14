@@ -8,23 +8,34 @@
 #   MODIFICATION HISTORY:
 #
 #	14-OCT-2026	RRL	No more git submodules: the <git submodule update> step is removed.
+#
+#	14-OCT-2026	RRL	The StarLet package (UTILITY$ROUTINES) is built from its sources and installed
+#				before the gateway; the gateway is built out of the source tree.
 #--
 
 image: gcc
+variables:
+  STARLET_REPO: "https://gitlab.com/SysMan-One/utility_routines.git"
+
 before_script:
   - echo "Install prerequisites ..."
   - apt-get update --yes
-  - apt-get install --yes cmake
-  - apt-get install --yes libconfig-dev
+  - apt-get install --yes cmake pkg-config libconfig-dev
+                  # The StarLet package: libstarlet + headers + find_package(StarLet), into /usr/local
+  - echo "Build and install StarLet ..."
+  - git clone --depth 1 "$STARLET_REPO" /tmp/starlet
+  - cmake -S /tmp/starlet -B /tmp/starlet/build -DCMAKE_BUILD_TYPE=Release
+  - cmake --build /tmp/starlet/build -j "$(nproc)"
+  - cmake --install /tmp/starlet/build
 
 stages:           # List of stages for jobs, and their order of execution
   - build
-  
+
 build-job:        # This job runs in the build stage, which runs first.
   stage: build
   script:
                   # Build yaMODBUS gw
     - echo "Compiling the code..."
-    - cmake ./CMakeLists.txt -DCMAKE_BUILD_TYPE=Debug
-    - make -s
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+    - cmake --build build -j "$(nproc)"
     - echo "Compile complete."

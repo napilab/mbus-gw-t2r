@@ -45,7 +45,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-12'
+VERSION   = 'X.00-12ECO01'
 PUBDATE_EN = 'August 2026'
 PUBDATE_RU = 'Август 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -622,7 +622,7 @@ def s_pack_en ():
 				'take a port above 1024 (e.g. 5502).'),
 			('%T2R-E-SERRANGE, ... out of range [a..b]', 'A settings value is out of its range; the allowed range is '
 				'right in the message. Fix the value.'),
-			('%T2R-E-NOSERIALS, No serials has been defined!', 'Not a single serials record survived the validation. '
+			('%T2R-E-NOSERIALS, No serials have been defined!', 'Not a single serials record survived the validation. '
 				'Read the error lines above --- each rejected record says why.'),
 			('The data is wrong or shifted', 'The byte order confusion on the client side: the MODBUS '
 				'registers are the big-endian 16-bit words; check how the client assembles the '
@@ -979,7 +979,7 @@ def s_pack_ru ():
 				'или возьмите порт выше 1024 (например 5502).'),
 			('%T2R-E-SERRANGE, ... out of range [a..b]', 'Значение в настройках вне диапазона; допустимый диапазон '
 				'написан прямо в сообщении. Исправьте значение.'),
-			('%T2R-E-NOSERIALS, No serials has been defined!', 'Ни одна запись serials не прошла проверку. Читайте '
+			('%T2R-E-NOSERIALS, No serials have been defined!', 'Ни одна запись serials не прошла проверку. Читайте '
 				'строки ошибок выше — каждая отброшенная запись объясняет причину.'),
 			('Данные неверные или сдвинутые', 'Путаница порядка байт у клиента: регистры MODBUS — '
 				'16-битные слова big-endian; проверьте, как клиент собирает 32/64-битные значения.'),

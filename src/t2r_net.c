@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-12"
-#define	__REV__		"00.12.00"
+#define	__IDENT__	"X.00-12ECO01"
+#define	__REV__		"00.12.01"
 
 /*
 **++
@@ -53,6 +53,11 @@
 **				rejects one more at once (CONNLIMIT); listen() gets its own backlog
 **				T2R$K_LISTEN_BACKLOG (was <connlm>); the idle timeout is <idletmo> of the
 **				listener (was T2R$K_IDLE_TMO_SEC = 1200).
+**
+**	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code
+**				(s_net_mbap_tx() had a copy of the s_net_mbap_rx() header, s_net_session()
+**				documented a wrong parameter); LSNRABRT shows the socket before it is closed
+**				(was always #-1).
 **--
 */
 
@@ -142,7 +147,9 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
  *	a_session:	.datalen is advanced by the has been sent octets
  *
  *   RETURNS:
- *	condition code; STS$K_WARN - the peer has closed the connection
+ *	STS$K_SUCCESS	- a portion has been sent (or nothing is left: ALLSENT is signalled)
+ *	STS$K_WARN	- send() has returned 0 (PEERCLOSE is signalled)
+ *	T2R$__NETSYSERR	- send() failed
  */
 static int	s_net_sendn (
 		T2R$_SESSION	*a_session
@@ -155,7 +162,7 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 		return	$PUTMSG_FAO(T2R$__ALLSENT, a_session->sd, a_session->datalen), STS$K_SUCCESS;
 
 
-											/* Read a data from socket */
+											/* Send a data to socket */
 	if ( !(l_rc = send(a_session->sd, l_netbuf_dsc->data + a_session->datalen, l_netbuf_dsc->len - a_session->datalen, MSG_NOSIGNAL)) )
 		return	$PUTMSG_FAO(T2R$__PEERCLOSE, a_session->sd), STS$K_WARN;
 
@@ -174,21 +181,21 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
 
 /*
- *   DESCRIPTION: Check and validate has been read data in the buffer, compute a length of data to be read from network socket,
- *	read from socket.
+ *   DESCRIPTION: Receive the next portion of an MBAP ADU into the session buffer. Once the 7-octet
+ *	MBAP header is complete, validate the protocol identifier (0) and the length field
+ *	(2..MODBUS$SZ_MAXPDU + 1) and set the number of octets which are still to be read.
  *
  *   INPUTS:
- *	a_session:	A session context
+ *	a_session:	A session context: .sd, .datalen, .netbuf_dsc
  *
  *   OUTPUTS:
- *	NONE:
- *
- *   IMPLICITE OUTPUTS:
- *	a_session:	update data buffer and counters
+ *	a_session:	.netbuf_dsc->len and .datalen are updated
  *
  *   RETURNS:
- *	T2R$__FULLMBAP:		Whole MBAP PDU in the buffer
- *	<condition code>
+ *	T2R$__FULLMBAP	- a whole ADU is in the buffer
+ *	STS$K_SUCCESS	- more data is expected
+ *	STS$K_WARN	- the peer has closed the connection
+ *	T2R$__BADPROTO, T2R$__PDUSHORT, T2R$__PDULONG, T2R$__NETSYSERR - an error
  */
 static int	s_net_mbap_rx (
 		T2R$_SESSION	*a_session
@@ -239,21 +246,17 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
 
 /*
- *   DESCRIPTION: Check and validate has been read data in the buffer, compute a length of data to be read from network socket,
- *	read from socket.
+ *   DESCRIPTION: Send the next portion of the MBAP answer from the session buffer to the TCP
+ *	client (see s_net_sendn()).
  *
  *   INPUTS:
- *	a_session:	A session context
+ *	a_session:	A session context: .sd, .datalen - octets already sent, .netbuf_dsc
  *
  *   OUTPUTS:
- *	NONE:
- *
- *   IMPLICITE OUTPUTS:
- *	a_session:	update data buffer and counters
+ *	a_session:	.datalen is advanced
  *
  *   RETURNS:
- *	T2R$__FULLMBAP:		Whole MBAP PDU in the buffer
- *	<condition code>
+ *	STS$K_SUCCESS, or the failure status of s_net_sendn() (STS$K_WARN, T2R$__NETSYSERR)
  */
 static int	s_net_mbap_tx (
 		T2R$_SESSION	*a_session
@@ -272,20 +275,24 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: A worker to serves single TCP-client:
- *	- to forward MODBUS-like request to serial device
- *	- read RTU answer from serial MODBUS-capable device
- *	- form and send MODBUS-like answer to remote clien
-
+ *   DESCRIPTION: A detached thread serving a single TCP client: receive an MBAP request, forward
+ *	it as an RTU PDU to the target serial device, convert the RTU answer back to MBAP and send
+ *	it to the client. The session is closed on: no activity for <idletmo> seconds of the
+ *	listener (READY state), a request/answer exchange longer than T2R$K_NET_TMO_SEC, a peer
+ *	close or an error, <g_exit_flag>. On exit the socket is closed, the <connlm> slot of the
+ *	listener is released (.sessions--) and the context is freed.
  *
  *   INPUTS:
- *	a_session:	A session context
+ *	a_arg:		T2R$_SESSION * - the session context (allocated by s_net_listener(), freed here)
  *
- *   OUTPUTS:
- *	NONE:
+ *   IMPLICIT INPUTS:
+ *	g_exit_flag, g_trace
+ *
+ *   IMPLICIT OUTPUTS:
+ *	a_arg->listener->sessions
  *
  *   RETURNS:
- *	NONE
+ *	NULL - is required by the pthread API only
  */
 
 static void *	s_net_session( void *a_arg)
@@ -325,7 +332,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 		 */
 		clock_gettime(CLOCK_MONOTONIC_COARSE, &l_now);
 
-		if ( l_session->state == T2R$K_STATE_READY )				/* Check global session timeout for idle session */
+		if ( l_session->state == T2R$K_STATE_READY )				/* Idle timeout of the listener: <idletmo> */
 			{
 			if ( (l_session->lastio_ts.tv_sec + l_session->listener->idletmo) < l_now.tv_sec)	/* <idletmo> of the listener */
 				{
@@ -333,7 +340,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 				break;
 				}
 			}
-		else if ( (l_session->lastio_ts.tv_sec + T2R$K_NET_TMO_SEC) < l_now.tv_sec)	/* 3 secs for read\write MBAP */
+		else if ( (l_session->lastio_ts.tv_sec + T2R$K_NET_TMO_SEC) < l_now.tv_sec)	/* T2R$K_NET_TMO_SEC for read/write of an ADU */
 				{
 				$PUTMSG_FAO(T2R$__NETRDTMO, l_session->sd, l_session->datalen, T2R$K_NET_TMO_SEC);
 				break;
@@ -457,9 +464,11 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 /*
  *   DESCRIPTION: A thread routine of the connections dispatcher. Waits (by polling the whole
- *	table of the listening sockets) for incoming TCP connection requests, accepts them,
- *	allocates a session context and starts a detached per-session thread. The loop is
- *	terminated by <g_exit_flag> or by a persistent poll() error.
+ *	table of the listening sockets) for incoming TCP connection requests and accepts them. A
+ *	connection beyond the <connlm> limit of the listener (active sessions) is rejected at once
+ *	(CONNLIMIT); otherwise TCP_NODELAY is set, a session context is allocated, counted in
+ *	.sessions and a per-session thread is started (s_net_session(), it detaches itself). The
+ *	loop is terminated by <g_exit_flag> or by a persistent poll() error.
  *
  *   INPUTS:
  *	a_arg:		Unused, is required by the pthread API only
@@ -469,6 +478,9 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
  *
  *   IMPLICITE INPUTS:
  *	s_pfd_lsnr, g_listeners, g_listeners_nr, g_exit_flag
+ *
+ *   IMPLICITE OUTPUTS:
+ *	g_listeners[].sessions
  *
  *   RETURNS:
  *	NULL - is required by the pthread API only
@@ -563,9 +575,9 @@ pthread_t	l_tid;
 
 
 /*
- *   DESCRIPTION: Stop the network subsystem: close all the has been opened listening sockets,
- *	then close all the has been opened serial devices. Is called at the exit path of the
- *	main routine.
+ *   DESCRIPTION: Close all the has been opened listening sockets, then close all the has been
+ *	opened serial devices (once per device). Is called at the exit path of the main routine.
+ *	The dispatcher and the session threads are not joined: they terminate on <g_exit_flag>.
  *
  *   INPUTS:
  *	NONE
@@ -573,11 +585,14 @@ pthread_t	l_tid;
  *   OUTPUTS:
  *	NONE
  *
+ *   IMPLICITE INPUTS:
+ *	g_listeners, g_listeners_nr, g_serials_nr
+ *
  *   IMPLICITE OUTPUTS:
  *	s_pfd_lsnr, g_serials
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS (always; a close error of a device is signalled only)
  */
 int t2r$net_stop_listeners (void)
 {
@@ -588,10 +603,10 @@ int	l_rc;
 		if ( 0 > s_pfd_lsnr[i].fd )						/* This one has not been started */
 			continue;
 
+		$PUTMSG_FAO(T2R$__LSNRABRT, s_pfd_lsnr[i].fd, &g_listeners[i].sk.sin_addr, ntohs(g_listeners[i].sk.sin_port));
+
 		close(s_pfd_lsnr[i].fd);
 		s_pfd_lsnr[i].fd = -1;
-
-		$PUTMSG_FAO(T2R$__LSNRABRT, s_pfd_lsnr[i].fd, &g_listeners[i].sk.sin_addr, ntohs(g_listeners[i].sk.sin_port));
 		}
 
 	/*
@@ -613,9 +628,10 @@ int	l_rc;
 
 /*
  *   DESCRIPTION: Start the network subsystem: for every record of the listeners table open a
- *	TCP socket, bind it to the has been configured address:port, open the target serial
- *	device, publish the socket to the poll() array of the dispatcher and finally start the
- *	dispatcher thread. A listener with a dead target device is skipped with a diagnostic.
+ *	TCP socket, bind it to the has been configured address:port, listen() with
+ *	T2R$K_LISTEN_BACKLOG, open the target serial device, publish the socket to the poll()
+ *	array of the dispatcher and finally start the dispatcher thread. A listener whose bind()/
+ *	listen() fails or whose target device cannot be opened is skipped with a diagnostic.
  *
  *   INPUTS:
  *	NONE
@@ -627,10 +643,12 @@ int	l_rc;
  *	g_listeners, g_listeners_nr
  *
  *   IMPLICITE OUTPUTS:
- *	s_pfd_lsnr
+ *	s_pfd_lsnr, g_listeners[].fd, g_serials (the opened devices)
  *
  *   RETURNS:
- *	condition code; STS$K_ERROR - no one listener has been started
+ *	STS$K_SUCCESS
+ *	T2R$__NOLSNRUP	- no one listener has been started
+ *	T2R$__SYSERR	- socket() or pthread_create() failed
  */
 int t2r$net_start_listeners (void)
 {

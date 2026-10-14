@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MODBUS"
-#define	__IDENT__	"X.00-11"
-#define	__REV__		"00.11.00"
+#define	__IDENT__	"X.00-12ECO01"
+#define	__REV__		"00.12.01"
 
 /*
 **++
@@ -36,6 +36,10 @@
 **
 **	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only: every $LOG() is replaced by
 **				$PUTMSG_FAO() with a coded message (NOROOM, MBAPLEN, REQSHORT).
+**
+**	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code
+**				(descriptor parameters, real status codes); t2r$rtu_pdu2ascii() checks the
+**				capacity of the output buffer (NOROOM) before hex2bin().
 **--
 */
 
@@ -187,7 +191,11 @@ const char *t2r$modbus_exc2str(
  *	a__li:		A line number at the calling module (__LINE__)
  *	a_pref:		A prefix text for the dump ("Rcvd", "Sent", ...)
  *	a_data:		An address of the ADU
- *	a_datalen:	An actual length of the ADU in octets
+ *	a_datalen:	An actual length of the ADU in octets; nothing is shown for an ADU shorter
+ *			than the MBAP header
+ *
+ *   IMPLICIT INPUTS:
+ *	g_trace
  *
  *   OUTPUTS:
  *	NONE
@@ -253,9 +261,13 @@ char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len 
  *	a__li:		A line number at the calling module (__LINE__)
  *	a_pref:		A prefix text for the dump ("Rcvd", "Sent", ...)
  *	a_data:		An address of the RTU frame
- *	a_datalen:	An actual length of the frame in octets
- *	a_crc:		A has been computed CRC16 (TX path), 0 - take the CRC from the frame
- *			trailer and verify it (RX path)
+ *	a_datalen:	An actual length of the frame in octets; nothing is shown for a frame
+ *			shorter than 2 octets
+ *	a_crc:		A has been computed CRC16 to show (TX path), 0 - show the CRC of the frame
+ *			trailer next to the calculated one (RX path; nothing is verified here)
+ *
+ *   IMPLICIT INPUTS:
+ *	g_trace
  *
  *   OUTPUTS:
  *	NONE
@@ -328,20 +340,20 @@ char	l_buf[(MODBUS$SZ_MAXPDU * 2) + 1] = {0};				/* __util$bin2hex() puts 2*len 
 
 
 /*
- *   DESCRIPTION: Transforms  MBAP-like (MODBUS Application Protocol) request has been received frop TCP-leg
- *	to PDU is supposed to be sent to target device over RTU-leg.
+ *   DESCRIPTION: Transform an MBAP (MODBUS Application Protocol) request which has been received
+ *	from the TCP leg to the PDU which is to be sent to the target device over the RTU leg.
  *
  *   INPUTS:
- *	a_src:		A buffer with MODBAS ADU
- *	a_srcsz:	A size of MBAP ADU
+ *	a_src_dsc:	A descriptor of the MBAP ADU (.data, .len)
+ *	a_dst_dsc:	.sz - a capacity of the output buffer
  *
  *   OUTPUTS:
- *	a_dst:		A buffer to accept RTU-like PDU
- *	a_dstsz:	A size of the buffer (MAX RTU PDU at least)
- *	a_dstlen:	A size of the RTU PDU
+ *	a_dst_dsc:	.data - the RTU PDU (unit + function + data, no CRC), .len - its length
  *
- *   RETURNS;
- *	condition code
+ *   RETURNS:
+ *	STS$K_SUCCESS
+ *	T2R$__NOROOM	- the output buffer is too small
+ *	T2R$__MBAPLEN	- the MBAP length field exceeds the received data
  */
 int t2r$mbap_2_rtu_pdu (
 		const void	*a_src_dsc,
@@ -371,16 +383,20 @@ uint16_t	l_len;
 
 
 /*
- *   DESCRIPTION: Put RTU PDU to the MBAP-like ADU after MBAP header part.
+ *   DESCRIPTION: Put the RTU PDU (an answer) after the MBAP header of the ADU in <a_dst_dsc> and
+ *	correct the MBAP .len field. TXID/PROTO are kept as is: the buffer must already hold the
+ *	MBAP header of the request.
  *
  *   INPUTS:
- *	a_src:		A buffer with MODBUS RTU PDU
+ *	a_src_dsc:	A descriptor of the RTU PDU (.data, .len)
+ *	a_dst_dsc:	.sz, .data - the MBAP header of the request
  *
  *   OUTPUTS:
- *	a_dst:		A buffer to accept MBAP-like ADU
+ *	a_dst_dsc:	.data - the ADU, .len - its length
  *
- *   RETURNS;
- *	condition code
+ *   RETURNS:
+ *	STS$K_SUCCESS
+ *	T2R$__NOROOM	- no room in the output buffer
  */
 int t2r$rtu_pdu_2_mbap (
 		const void	*a_src_dsc,
@@ -408,18 +424,21 @@ MODBUS_ADU_T *l_mbap = (MODBUS_ADU_T *) l_dst_dsc->data;
 
 
 /*
- *   DESCRIPTION: Convert MODBUS PDU (in binary representative) to ASCII format:
+ *   DESCRIPTION: Convert MODBUS PDU (in binary representation) to ASCII format:
  *	- got octet string: 0x01 0x03 0x00 0x00 0x00 0x01 0xFB
  *	- out ASCII string: ':'_"010300000001FB"_"0D0A" (concatenation symbol "_" - is for readability purpose)
+ *	NOTE: the name is inverted against the body (binary -> ASCII); there are no callers yet.
  *
  *   INPUTS:
- *	a_src:
+ *	a_src_dsc:	A binary PDU (.data, .len)
+ *	a_dst_dsc:	.sz - a capacity of the output buffer
  *
  *   OUTPUTS:
- *	a_dst:
+ *	a_dst_dsc:	.data - ':'<hex><CR><LF>, .len
  *
  *   RETURNS:
- *	<condition code>
+ *	STS$K_SUCCESS
+ *	STS$K_ERROR	- no room in the output buffer (no diagnostic)
  */
 int t2r$ascii_pdu2rtu (
 		const void	*a_src_dsc,
@@ -458,18 +477,20 @@ char	*l_dst;
  *   DESCRIPTION: Convert MODBUS ASCII string to MODBUS PDU
  *	- get ASCII string: ':010300000001FB0D0A"
  *	- out octet string: 0x01 0x03 0x00 0x00 0x00 0x01 0xFB (remove leading ':' and <CR><LF> sequence)
+ *	NOTE: the name is inverted against the body (ASCII -> binary); there are no callers yet.
  *
  *   INPUTS:
- *	a_src:
- *	a_srclen:
- *	a_dstsz:
+ *	a_src_dsc:	An ASCII frame ':'<hex><CR><LF> (.data, .len)
+ *	a_dst_dsc:	.sz - a capacity of the output buffer
  *
  *   OUTPUTS:
- *	a_dst:
- *	a_retlen
+ *	a_dst_dsc:	.data - the binary PDU, .len
  *
  *   RETURNS:
- *	<errno>
+ *	STS$K_SUCCESS
+ *	T2R$__REQSHORT	- the frame is shorter than 3 octets
+ *	T2R$__NOROOM	- the binary PDU does not fit into the output buffer
+ *	STS$K_ERROR	- no ':' prefix or no <CR><LF> trailer
  */
 int t2r$rtu_pdu2ascii (
 		const void	*a_src_dsc,
@@ -498,6 +519,10 @@ const char	*l_src;
 
 	l_len = l_src_dsc->len - 1 - 2;							/* Compute a length of hex part of the MODBUS PDU */
 	l_src++;									/* Advance pointer to hex part */
+
+	if ( (l_len / 2) > l_dst_dsc->sz )						/* Must fit into the output buffer */
+		return	$PUTMSG_FAO(T2R$__NOROOM, l_len / 2, l_dst_dsc->sz);
+
 	__util$hex2bin (l_src, l_dst_dsc->data, l_len);
 
 	l_dst_dsc->len = l_len / 2;

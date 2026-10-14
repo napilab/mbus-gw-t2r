@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-TTY"
-#define	__IDENT__	"X.00-11"
-#define	__REV__		"00.11.00"
+#define	__IDENT__	"X.00-12ECO01"
+#define	__REV__		"00.12.01"
 
 /*
 **++
@@ -53,6 +53,10 @@
 **				$PUTMSG_FAO() with a coded message (TTYSYSERR, DEVSYSERR, RESPMISM, ...);
 **				s_tty_open(): the RS485 mode is set by TIOCSRS485 (the second ioctl() was
 **				TIOCGRS485 again - the mode has never been switched on).
+**
+**	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code
+**				(t2r$tty_close() had a copy of the t2r$tty_open() header, s_tty_flush() is a
+**				fixed t3.5 window, the RETURNS sections name the real status codes).
 **--
 */
 #include	<time.h>
@@ -86,7 +90,7 @@ extern int	g_exit_flag, g_trace;
  *   DESCRIPTION: Get an exclusive access to the serial device: a MODBUS RTU line is strictly a
  *	half duplex request-answer bus, so only one network session at a time is allowed to talk
  *	to it. A timed lock is used (13 seconds, 3 attempts) to detect a stuck holder instead of
- *	hanging forever.
+ *	hanging forever. Every timed out attempt is signalled by DEVSYSWRN.
  *
  *   INPUTS:
  *	a_serial:	A context of the serial line, .lock - the guarding mutex
@@ -95,7 +99,9 @@ extern int	g_exit_flag, g_trace;
  *	NONE
  *
  *   RETURNS:
- *	condition code; STS$K_ERROR - the lock has not been taken after all the attempts
+ *	STS$K_SUCCESS	- the lock has been taken
+ *	T2R$__DEVLOCKERR - the lock has not been taken after 3 attempts
+ *	T2R$__SYSERR	- clock_gettime() failed
  */
 static inline int s_tty_lock (
 		T2R$_SERIAL	*a_serial
@@ -153,10 +159,12 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: Check and validate data in the buffer to be sent;
- *	- compute CRC16
- *	- send PDU + CRC16 over serial line
- *	- do delay in 3.5 characters
+ *   DESCRIPTION: Send a request PDU over the serial line:
+ *	- an empty PDU is skipped (TXNODATA is signalled, success is returned)
+ *	- compute CRC16 (the low octet goes first on the wire)
+ *	- flush a stale input (tcflush(TCIFLUSH))
+ *	- wait the inter-PDU interval (t3.5), writev() PDU + CRC16, tcdrain()
+ *	- wait the inter-PDU interval (t3.5) again
  *
  *   INPUTS:
  *	a_serial:	A context of the serial line
@@ -166,7 +174,7 @@ int	l_rc;
  *	NONE
  *
  *   RETURNS:
- *	condition status
+ *	STS$K_SUCCESS, T2R$__XMITERR, T2R$__XMITSHORT, T2R$__TTYSYSERR (tcdrain() failed)
  */
 static int	s_tty_rtu_tx (
 	const T2R$_SERIAL	*a_serial,
@@ -310,18 +318,26 @@ int	l_qty;
  *	   When the length cannot be predicted - until the line keeps silence for the t3.5
  *	   interval, the end-of-frame criteria of the MODBUS over Serial Line specification. The
  *	   interval is restarted on every successfully read chunk of the data.
- *	3. A whole frame must be collected within the answer timeout, otherwise the frame is
- *	   considered as a broken one.
+ *	3. The rest of the frame must be collected within the answer timeout counted from the
+ *	   first octet; otherwise FRAMETMO is signalled and the partial data is validated (it
+ *	   fails BADFRAME/CRC16ERR). Octets beyond the expected length are dropped, a full
+ *	   buffer stops the reading (RXBUFFULL).
+ *	4. Check the frame length, the CRC16, and that the slave and the function code match
+ *	   the request.
  *
  *   INPUTS:
  *	a_serial:	A context of the serial line
  *	a_req_pdu:	A descriptor of the request PDU - is used to match the slave and the function code
+ *	a_resp_pdu:	.data/.sz - the receive buffer
+ *
+ *   IMPLICIT INPUTS:
+ *	g_exit_flag
  *
  *   OUTPUTS:
- *	a_resp_pdu:	A descriptor to accept the response PDU, the CRC16 trailer is stripped off
+ *	a_resp_pdu:	.data/.len - the response PDU, the CRC16 trailer is stripped off
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS, or NOANSWER, TTYSYSERR, RXNODATA, BADFRAME, CRC16ERR, RESPMISM
  */
 static int	s_tty_rtu_rx (
 	const T2R$_SERIAL	*a_serial,
@@ -642,10 +658,11 @@ speed_t l_speed;
  *			attributes as they were before s_tty_open()
  *
  *   OUTPUTS:
- *	a_serial:	.fd is set to -1
+ *	a_serial:	.fd is closed and set to -1 (left untouched if it is not a TTY)
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS	- a tcsetattr(TCSAFLUSH) failure is signalled only (DEVSYSERR)
+ *	T2R$__NOTTTY	- the descriptor is not a TTY, nothing is closed
  */
 static int s_tty_close (
 	T2R$_SERIAL	*a_serial
@@ -674,8 +691,11 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: Open and set up a serial port for the RTU communications: raw 8-bit I/O, the
- *	has been configured rate/data bits/parity/stop bits, an optional RS-485 mode.
+ *   DESCRIPTION: Open (O_RDWR|O_NOCTTY|O_NDELAY|O_EXCL|O_CLOEXEC) and set up a serial port for
+ *	the RTU communications: the configured rate/data bits (5..8)/parity/stop bits, raw
+ *	non-canonical I/O without a software flow control, VMIN = VTIME = 0. If HAVE_TIOCRS485
+ *	is defined and T2R$M_SERIAL_RS485 is set, the RS-485 mode is switched on by TIOCGRS485 +
+ *	TIOCSRS485; a failure there is not fatal (RS485OFF, the flag is cleared).
  *	Stolen and adopted from LIBMODBUS\MODBUS-RTU.C.
  *
  *   INPUTS:
@@ -684,10 +704,14 @@ int	l_rc;
  *
  *   OUTPUTS:
  *	a_serial:	.fd - a descriptor of the has been opened device (-1 on a failure),
- *			.savedtios - the original terminal attributes to be restored at close
+ *			.savedtios - the original terminal attributes to be restored at close,
+ *			.tios - the applied (working) terminal attributes,
+ *			.flags - T2R$M_SERIAL_RS485 is cleared if the RS-485 mode cannot be set
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS
+ *	T2R$__DEVOPNERR	- open() failed
+ *	T2R$__DEVSYSERR	- tcgetattr()/cfset*speed()/tcsetattr() failed (the descriptor is closed)
  */
 static int s_tty_open (
 			       T2R$_SERIAL	*a_serial
@@ -845,7 +869,7 @@ int	l_flags = 0, l_rc;
  *	a_resp_dsc:	A descriptor to accept the has been formed exception PDU (3 octets)
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS (always)
  */
 static inline int s_make_exception_resp (
 		     void	*a_req_dsc,
@@ -901,8 +925,9 @@ static inline uint16_t * s_put_be16 (
 /*
  *   DESCRIPTION: Form an answer PDU with the local Time Stamp - a "pseudo device" feature.
  *	Depending on the has been requested quantity of registers the answer is:
- *	4 registers - seconds (64 bits, MSW first), +4 - nanoseconds (64 bits, MSW first),
- *	+1 - the local timezone offset in signed minutes.
+ *	4..7 registers - seconds (64 bits, MSW first, 4 registers only), 8 - + nanoseconds
+ *	(64 bits, MSW first), 9 - + the local timezone offset in signed minutes. The time is
+ *	taken from CLOCK_REALTIME_COARSE (the nanoseconds have a jiffy resolution).
  *
  *   INPUTS:
  *	a_req_dsc:	A descriptor of the request PDU
@@ -911,7 +936,8 @@ static inline uint16_t * s_put_be16 (
  *	a_resp_dsc:	A descriptor to accept the answer PDU
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS
+ *	STS$K_ERROR	- the requested quantity is out of the 4..9 range
  */
 static int s_add_ts_to_pdu (
 		void	*a_req_dsc,
@@ -994,16 +1020,20 @@ uint16_t	*l_valptr;
 
 
 /*
- *   DESCRIPTION: Get exclusive lock for serial device, check and do if need initialization.
+ *   DESCRIPTION: Under the device lock, open and set up the serial line if it is not initialized
+ *	yet; on success the state becomes READY and DEVREADY is signalled. An already initialized
+ *	device is left as is (DEVINIT).
  *
  *   INPUTS:
- *	a_serial:	A context for serial comminication line
+ *	a_serial:	A context of the serial line
  *
  *   OUTPUTS:
- *	a_serial:
+ *	a_serial:	.state = READY on success; .fd/.savedtios/.tios/.flags - see s_tty_open()
  *
  *   RETURNS:
- *	condition code
+ *	T2R$__DEVINIERR	- the device lock is not taken
+ *	T2R$__DEVINIT	- the device is already initialized (a success-level code)
+ *	otherwise	- the s_tty_open() status
  */
 int	t2r$tty_open (
 			       T2R$_SERIAL	*a_serial
@@ -1031,16 +1061,20 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: Get exclusive lock for serial device, check and do if need initialization.
+ *   DESCRIPTION: Under the device lock, close an initialized serial line (restore the saved
+ *	terminal attributes) and set its state to IDLE. A not initialized device is reported by
+ *	DEVNOTINI.
  *
  *   INPUTS:
- *	a_serial:	A context for serial comminication line
+ *	a_serial:	A context of the serial line
  *
  *   OUTPUTS:
- *	a_serial:
+ *	a_serial:	.state = IDLE, .fd = -1 (see s_tty_close())
  *
  *   RETURNS:
- *	condition code
+ *	T2R$__DEVCLSERR	- the device lock is not taken
+ *	T2R$__DEVNOTINI	- the device has not been initialized
+ *	otherwise	- the s_tty_close() status
  */
 int	t2r$tty_close (
 			       T2R$_SERIAL	*a_serial
@@ -1063,17 +1097,21 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: Drop a has been left garbage from the serial line: flush the kernel FIFOs,
- *	then drain the line until it keeps silence for the inter-PDU interval.
+ *   DESCRIPTION: Drop a has been left garbage from the serial line: tcflush(TCIOFLUSH) the kernel
+ *	FIFOs, then read and discard the incoming data for one inter-PDU (t3.5) interval - a fixed
+ *	window, it is not restarted by the arriving data.
  *
  *   INPUTS:
  *	a_serial:	A context of the serial line
+ *
+ *   IMPLICIT INPUTS:
+ *	g_exit_flag
  *
  *   OUTPUTS:
  *	NONE
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS (always; the poll()/read() errors are signalled by TTYSYSWRN)
  */
 static int	s_tty_flush (
 	const T2R$_SERIAL	*a_serial
@@ -1131,20 +1169,22 @@ char	l_buf[MODBUS$SZ_MAXPDU];
 /*
  *   DESCRIPTION: Execute a single MODBUS request-answer transaction on the RTU leg. The serial
  *	device is taken for an exclusive use for the whole transaction. A request to the has been
- *	configured Time Stamp pseudo device (unit/function match) is answered locally without
- *	touching the line. On an I/O error the line is flushed and a MODBUS exception code is
- *	returned to be delivered to the network requester.
+ *	configured Time Stamp pseudo device (T2R$M_SERIAL_ADDTS is set and the unit, the function
+ *	and the start register match) is answered locally, without the lock and without touching
+ *	the line; a bad quantity is answered by the ILLEGAL_DATA_ADDRESS exception. On an RTU I/O
+ *	error the line is flushed and a SERVER_DEVICE_FAILURE exception PDU is formed.
  *
  *   INPUTS:
  *	a_serial:	A context of the serial line
  *	a_req_dsc:	A descriptor of the request PDU (without MBAP and without CRC)
  *
  *   OUTPUTS:
- *	a_resp_dsc:	A descriptor to accept the answer PDU (the CRC trailer is stripped off)
- *	a_excode:	A MODBUS exception code to be reported to the requester, 0 - no exception
+ *	a_resp_dsc:	The answer PDU (the CRC trailer is stripped off), or a 3-octet exception PDU
+ *	a_excode:	The exception code of the formed exception PDU, 0 - no exception
  *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS	- an answer or an exception PDU is in a_resp_dsc (check a_excode)
+ *	T2R$__DEVBUSY	- the device lock is not taken, a_resp_dsc is not filled
  */
 int	t2r$tty_exec_req (
 		T2R$_SERIAL	*a_serial,

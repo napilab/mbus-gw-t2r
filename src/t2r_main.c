@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-12"
-#define	__REV__		"00.12.00"
+#define	__IDENT__	"X.00-12ECO01"
+#define	__REV__		"00.12.01"
 
 /*
 **++
@@ -19,11 +19,13 @@
 **
 **
 **  USAGE:
-**	$ tootoo3_cgw [options]
+**	$ mbusgw-t2r [options]
 **		options:
-**			/TRACE		- enable extensible debug diagnostic output
-**			/LOGFILE	- a file name for the logfile
-**			/SETTINGS	- configuration option for network and serial stuff
+**			/SETTINGS=<file>	- the settings file: serial lines and network listeners
+**			/CONFIG=<file>		- a configuration options file
+**			/TRACE			- enable extensible debug diagnostic output
+**			/LOGFILE=<file>		- a file name for the logfile
+**			/LOGSIZE=<number>	- a maximum size of the logfile in octets
 **
 **  MODIFICATION HISTORY:
 **
@@ -120,6 +122,10 @@
 **				of a listener (default 32, 1..512), the new <idletmo> listener option is the
 **				idle session timeout in seconds (default 60, 1..86400; was 1200 hardcoded);
 **				both are validated (LSNOPTRNG), LSNADDED shows them.
+**
+**	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code;
+**				main() returns EXIT_FAILURE on a command line/settings error (was the
+**				condition code - an arbitrary exit status); USAGE and help[] name /SETTINGS.
 **--
 */
 
@@ -221,6 +227,7 @@ static const OPTS g_optstbl [] =					/* General CLI options		*/
 
 const char	help [] = { "Usage:\n" \
 	"$ %s [<options_list>]\n\n" \
+	"\t/SETTINGS=<file>   settings file: serial lines and network listeners\n" \
 	"\t/CONFIG=<file>     configuration options file path\n" \
 	"\t/TRACE             enable extensible diagnostic output\n" \
 	"\t/LOGFILE=<file>    a specification of file to accept logging\n" \
@@ -230,7 +237,8 @@ const char	help [] = { "Usage:\n" \
 
 
 /*
- *   DESCRIPTION: Lookup a serial context for a given device in the global table
+ *   DESCRIPTION: Lookup (case-insensitive) a serial context for a given device name in the global
+ *	table of serials.
  *
  *   INPUTS:
  *	a_target:	A device name for looking for
@@ -238,8 +246,12 @@ const char	help [] = { "Usage:\n" \
  *   OUTPUTS:
  *	a_serial:	A returned serial context
  *
+ *   IMPLICIT INPUTS:
+ *	g_serials, g_serials_nr
+ *
  *   RETURNS:
- *	condition code
+ *	STS$K_SUCCESS	- the device has been found
+ *	T2R$__TGTNDEF	- the device has not been defined (signalled)
  */
 static int s_settings_find_n_get_serial (
 			const	char	*a_target,
@@ -262,9 +274,12 @@ static int s_settings_find_n_get_serial (
 
 
 /*
- *  DESCRIPTION: Process settings for serial communication devices with validation,
- *	fill global table of serial devices by new records. An illformed record is rejected
- *	with a diagnostic, processing is continued from the next one.
+ *  DESCRIPTION: Process the <serials> section: mandatory <device>, <chars> ("baud, databits,
+ *	parity, stopbits", range checked); optional <rs485>, <iotmo> (the answer timeout, msec,
+ *	a non-positive value is ignored), <ts_enabled>, <ts_fncode>, <ts_base_reg0>, <ts_unit>.
+ *	Compute the octet time and t3.5, init the device lock, fill the global table of serial
+ *	devices (at most T2R$K_MAX_SERIALS records). An ill-formed record is rejected with a
+ *	diagnostic, processing is continued from the next one.
  *
  *  INPUTS:
  *	a_cfg:		A context of LIBCONFIG for settings file
@@ -276,7 +291,9 @@ static int s_settings_find_n_get_serial (
  *	g_serials, g_serials_nr
  *
  *  RETURNS:
- *	condition code
+ *	STS$K_SUCCESS	- at least one device has been accepted
+ *	T2R$__CFGNOSECT	- no <serials> section
+ *	T2R$__NOSERIALS	- not a single valid record
  *
  */
 static int	s_settings_process_serials (config_t	*a_cfg)
@@ -463,9 +480,13 @@ char	l_chars[64];
 
 
 /*
- *  DESCRIPTION: Process settings for network listeners with validation, fill global table of
- *	listeners by new records. An illformed record is rejected with a diagnostic, processing
- *	is continued from the next one.
+ *  DESCRIPTION: Process the <listeners> section: mandatory <bind> ("TCP:a.b.c.d:port"; UDP is
+ *	rejected, the port and the address are validated) and <target> (a defined serial device);
+ *	optional <connlm> (the simultaneous sessions limit, T2R$K_CONNLM_MIN..MAX, default
+ *	T2R$K_CONNLM_DEF), <idletmo> (the idle session timeout, seconds, T2R$K_IDLETMO_MIN..MAX,
+ *	default T2R$K_IDLETMO_DEF) and <iotmo> (is stored, not used yet). Fill the global table of
+ *	listeners (at most T2R$K_MAX_LISTENERS records). An ill-formed or out of range record is
+ *	rejected with a diagnostic, processing is continued from the next one.
  *
  *  INPUTS:
  *	a_cfg:		A context of LIBCONFIG for settings file
@@ -473,11 +494,16 @@ char	l_chars[64];
  *  OUTPUTS:
  *	NONE
  *
+ *  IMPLICITE INPUTS:
+ *	g_serials, g_serials_nr (see s_settings_find_n_get_serial())
+ *
  *  IMPLICITE OUTPUTS:
  *	g_listeners, g_listeners_nr
  *
  *  RETURNS:
- *	condition code
+ *	STS$K_SUCCESS	- at least one listener has been accepted
+ *	T2R$__CFGNOSECT	- no <listeners> section
+ *	T2R$__NOLSNRS	- not a single valid record
  *
  */
 static int	s_settings_process_listeners (config_t	*a_cfg)
@@ -652,7 +678,7 @@ int	l_rc;
 	config_set_options (&g_cfg, CONFIG_OPTION_IGNORECASE);
 #endif
 
-	/* Read the file. If there is an error, report it and exit. */
+	/* Read the file; on an error report it (CFGPARSE), release the context and return */
 	if( !config_read_file(&g_cfg, a_settings_conf))
 		{
 		$PUTMSG_FAO(T2R$__CFGPARSE, config_error_file(&g_cfg), config_error_line(&g_cfg), config_error_text(&g_cfg), errno);
@@ -670,8 +696,8 @@ int	l_rc;
 
 
 /*
- *   DESCRIPTION: Validate the has been accepted run-time parameters as a whole, show them in
- *	the log for the operational control.
+ *   DESCRIPTION: Load and parse the settings file which is given by /SETTINGS (see
+ *	s_settings_load_n_parse()).
  *
  *   INPUTS:
  *	NONE
@@ -680,10 +706,13 @@ int	l_rc;
  *	NONE
  *
  *   IMPLICITE INPUTS:
- *	g_settings, g_logfspec
+ *	g_settings
+ *
+ *   IMPLICITE OUTPUTS:
+ *	g_cfg, g_serials, g_serials_nr, g_listeners, g_listeners_nr
  *
  *   RETURNS:
- *	condition code
+ *	the condition code of s_settings_load_n_parse()
  */
 static int	s_config_validation	(void)
 {
@@ -697,15 +726,19 @@ int l_rc;
 
 /*
  *   DESCRIPTION: A handler of the asynchronous signals. The termination signals (SIGTERM,
- *	SIGINT, SIGQUIT) do set the <g_exit_flag>, a repeated one terminates the process
- *	immediately. SIGUSR1 toggles the tracing at run-time. Only the async-signal-safe calls
- *	are used here: write() instead of fprintf()/fflush().
+ *	SIGINT, SIGQUIT) do set the <g_exit_flag>, SIGUSR1 toggles the tracing at run-time. Any
+ *	signal delivered after <g_exit_flag> has been set, and any unexpected signal, terminates
+ *	the process at once by _exit(<signal number>). Only the async-signal-safe calls are used
+ *	here: write() instead of fprintf()/fflush().
  *
  *   INPUTS:
  *	a_signo:	A number of the has been delivered signal
  *
  *   OUTPUTS:
  *	NONE
+ *
+ *   IMPLICITE INPUTS:
+ *	g_exit_flag, g_trace
  *
  *   IMPLICITE OUTPUTS:
  *	g_exit_flag, g_trace
@@ -760,15 +793,18 @@ static	void	s_sig_handler (int a_signo)
 }
 
 /*
- *   DESCRIPTION: Establish the handler of the asynchronous signals for the termination and the
- *	trace toggling, ignore SIGPIPE (a write to a has been closed socket must be seen as an
- *	EPIPE error, not as a process termination).
+ *   DESCRIPTION: Establish the handler of the asynchronous signals (SIGTERM, SIGINT, SIGQUIT -
+ *	the termination, SIGUSR1 - the trace toggling), ignore SIGPIPE (a write to a has been
+ *	closed socket must be seen as an EPIPE error, not as a process termination).
  *
  *   INPUTS:
  *	NONE
  *
  *   OUTPUTS:
  *	NONE
+ *
+ *   IMPLICITE INPUTS:
+ *	g_trace
  *
  *   RETURNS:
  *	NONE
@@ -794,10 +830,11 @@ const int siglist [] = {SIGTERM, SIGINT, SIGUSR1, SIGQUIT, 0 };
 
 
 /*
- *   DESCRIPTION: Main entry point of the program: accept and parse the command line arguments,
- *	load and validate the run-time parameters, establish the signal handling, start the
- *	network subsystem and stay in the main loop until the exit flag is set, then stop the
- *	subsystems in the reverse order.
+ *   DESCRIPTION: Main entry point of the program: init the message catalogue, show the revision
+ *	banner, parse the command line, switch the logging to /LOGFILE if it is given (the banner
+ *	is repeated there), load and validate the settings, establish the signal handling, start
+ *	the network subsystem and sleep until <g_exit_flag> is set, then close the listeners and
+ *	the serial devices (t2r$net_stop_listeners()).
  *
  *   INPUTS:
  *	argc:		A count of the command line arguments
@@ -806,6 +843,9 @@ const int siglist [] = {SIGTERM, SIGINT, SIGUSR1, SIGQUIT, 0 };
  *
  *   OUTPUTS:
  *	NONE
+ *
+ *   IMPLICITE INPUTS:
+ *	g_optstbl, g_logfspec, g_trace, g_exit_flag
  *
  *   RETURNS:
  *	EXIT_SUCCESS - a normal termination by the exit flag, EXIT_FAILURE - otherwise
@@ -824,7 +864,7 @@ int l_rc = 0;
 	 * Process command line arguments
 	 */
 	if ( !(1 & __util$getparams(argc, argv, g_optstbl)) )
-		return	$PUTMSG_FAO(T2R$__CFGERR);
+		return	$PUTMSG_FAO(T2R$__CFGERR), EXIT_FAILURE;
 
 
 	if ( $ASCLEN(&g_logfspec) )
@@ -838,7 +878,7 @@ int l_rc = 0;
 		__util$showparams(g_optstbl);
 
 	if ( !(1 & s_config_validation()) )
-		return	$PUTMSG_FAO(T2R$__CFGABORT);
+		return	$PUTMSG_FAO(T2R$__CFGABORT), EXIT_FAILURE;
 
 
 

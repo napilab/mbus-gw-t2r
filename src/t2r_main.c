@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13ECO01"
-#define	__REV__		"00.13.01"
+#define	__IDENT__	"X.00-13ECO02"
+#define	__REV__		"00.13.02"
 
 /*
 **++
@@ -140,6 +140,9 @@
 **	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - T2R-TTY: the device lock cannot be held forever
 **				anymore (tcdrain() is replaced by the bounded s_tty_tx_drain(), TXDRAINTMO),
 **				CRTSCTS is cleared at the open; T2R-NET: no double DEVCLSERR.
+**
+**	14-OCT-2026	RRL	X.00-13ECO02 / REV: 00.13.02 - NETPOLLEV is signalled as a WARNING (a connection
+**				reset by the client).
 **--
 */
 

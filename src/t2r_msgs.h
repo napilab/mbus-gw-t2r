@@ -35,6 +35,10 @@
 **
 **	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - Added TXDRAINTMO: the transmission of a request
 **				has not been completed in time (the bounded replacement of tcdrain()).
+**
+**	14-OCT-2026	RRL	X.00-13ECO02 / REV: 00.13.02 - NETPOLLEV is a WARNING (was ERROR): a TCP client
+**				which resets its connections (a restart of the polling program) is not a
+**				failure of the gateway.
 **--
 */
 
@@ -90,7 +94,7 @@ $DEF_MSG(T2R, ERROR,	PDULONG,			"[#!SL] --- MODBUS PDU is too long (!SL > !UL oc
 $DEF_MSG(T2R, WARN,	IDLETMO,			"[#!SL] No activity for the past !UL seconds (idletmo) --- close the connection") \
 $DEF_MSG(T2R, ERROR,	NETRDTMO,		"[#!SL] No data read (!UL octets) in !UL seconds") \
 $DEF_MSG(T2R, WARN,	REQFAIL,			"[#!SL] Request processing failed --- MODBUS exception: !UL/!XB") \
-$DEF_MSG(T2R, ERROR,	NETPOLLEV,		"[#!SL] poll()->!SL, .revents: !XW, errno: !SL") \
+$DEF_MSG(T2R, WARN,	NETPOLLEV,		"[#!SL] poll()->!SL, .revents: !XW, errno: !SL") \
 $DEF_MSG(T2R, ERROR,	SESSFAIL,		"[#!SL] !%I:!UW --- cannot start a session thread, pthread_create()->!SL") \
 $DEF_MSG(T2R, WARN,	LSNRABRT,		"[#!SL] Listener !%I:!UW --- is aborted") \
 $DEF_MSG(T2R, ERROR,	TGTOPNERR,		"Listener !%I:!UW --- target <!AZ> cannot be opened") \

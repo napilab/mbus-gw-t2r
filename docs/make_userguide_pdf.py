@@ -15,6 +15,11 @@
 #	AUTHOR: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 #
 #	CREATION DATE: 25-AUG-2026
+#
+#	MODIFICATION HISTORY:
+#
+#	14-OCT-2026	RRL	October 2026 edition: the Related Documents mention the GitLab CI build;
+#				the Russian guide points to README_RU.md.
 #--
 import sys
 
@@ -46,8 +51,8 @@ PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
 VERSION   = 'X.00-13'
-PUBDATE_EN = 'August 2026'
-PUBDATE_RU = 'Август 2026'
+PUBDATE_EN = 'October 2026'
+PUBDATE_RU = 'Октябрь 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
 
 # ----------------------------------------------------------------------------------------------
@@ -405,7 +410,8 @@ def s_pack_en ():
 			'all the message codes.']),
 		('Related Documents', [
 			'<i>README.md</i> --- the installation sequence (the StarLet package, the build, '
-			'<font face="Mono">make install</font>). '
+			'<font face="Mono">make install</font>) and the automatic build in GitLab CI '
+			'(<font face="Mono">.gitlab-ci.yml</font>). '
 			'<i>MODBUS over Serial Line Specification and Implementation Guide</i> and '
 			'<i>MODBUS Application Protocol Specification</i> --- the protocol itself, '
 			'available from modbus.org.']),
@@ -771,8 +777,9 @@ def s_pack_ru ():
 			'времени. Глава 6 учит читать журнал. Глава 7 — справочник по поиску неисправностей: '
 			'симптом, причина, действие, и справочник всех кодов сообщений.']),
 		('Смежные документы', [
-			'<i>README.md</i> — последовательность установки (пакет StarLet, сборка, '
-			'<font face="Mono">make install</font>). '
+			'<i>README_RU.md</i> — последовательность установки (пакет StarLet, сборка, '
+			'<font face="Mono">make install</font>) и автоматическая сборка в GitLab CI '
+			'(<font face="Mono">.gitlab-ci.yml</font>). '
 			'<i>MODBUS over Serial Line Specification and Implementation Guide</i> и '
 			'<i>MODBUS Application Protocol Specification</i> — сам протокол, доступны на modbus.org.']),
 	]
@@ -814,7 +821,7 @@ def s_pack_ru ():
 		   'ведомого</i> внутри самого MODBUS-запроса; шлюзу их адреса знать не нужно вовсе.')],
 		[H1('Глава 2.  Перед началом'),
 		 P('Пройдите этот список один раз — он сэкономит час гаданий потом.'),
-		 P('<b>1.</b> Шлюз установлен (см. <i>README.md</i>). После установки у вас есть программа '
+		 P('<b>1.</b> Шлюз установлен (см. <i>README_RU.md</i>, раздел «Установка»). После установки у вас есть программа '
 		   '<font face="Mono">/opt/mbusgw-t2r/sbin/mbusgw-t2r</font> и файл настроек '
 		   '<font face="Mono">/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf</font>.'),
 		 P('<b>2.</b> Вы знаете, к какому последовательному порту подключено устройство. В Linux это '

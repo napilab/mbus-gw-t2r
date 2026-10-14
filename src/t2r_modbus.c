@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MODBUS"
-#define	__IDENT__	"X.00-08ECO01"
-#define	__REV__		"00.08.01"
+#define	__IDENT__	"X.00-11"
+#define	__REV__		"00.11.00"
 
 /*
 **++
@@ -34,6 +34,8 @@
 **	25-AUG-2026	RRL	X.00-08ECO01 / REV: 00.08.01 - The dump length is clipped by the library
 **				$MIN() macro instead of the hand written ternary chains.
 **
+**	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only: every $LOG() is replaced by
+**				$PUTMSG_FAO() with a coded message (NOROOM, MBAPLEN, REQSHORT).
 **--
 */
 
@@ -354,11 +356,10 @@ uint16_t	l_len;
 
 
 	if ( (l_len = ntohs(l_mbap->len)) > l_dst_dsc->sz )
-		return	$LOG(STS$K_ERROR, "No room for output data (%d > %d octets)", l_len, l_dst_dsc->sz );
+		return	$PUTMSG_FAO(T2R$__NOROOM, l_len, l_dst_dsc->sz);
 
 	if ( l_len > (l_src_dsc->len - MODBUS$SZ_MBAPHDR) )			/* Never trust the wire-declared length */
-		return	$LOG(STS$K_ERROR, "MBAP length field (%d) exceeds received data (%d octets)",
-				l_len, l_src_dsc->len - MODBUS$SZ_MBAPHDR);
+		return	$PUTMSG_FAO(T2R$__MBAPLEN, l_len, l_src_dsc->len - MODBUS$SZ_MBAPHDR);
 
 
 	memcpy(l_dst_dsc->data, &l_mbap->unit, l_len);				/* Copy request part of MBAP to RTU PUD buffer*/
@@ -392,7 +393,7 @@ MODBUS_ADU_T *l_mbap = (MODBUS_ADU_T *) l_dst_dsc->data;
 
 
 	if ( l_src_dsc->len > (l_dst_dsc->sz - MODBUS$SZ_MINMBAP) )
-		return	$LOG(STS$K_ERROR, "No room for output data (%d > %d octets)", l_src_dsc->len,  (l_dst_dsc->sz - MODBUS$SZ_MINMBAP));
+		return	$PUTMSG_FAO(T2R$__NOROOM, l_src_dsc->len, l_dst_dsc->sz - MODBUS$SZ_MINMBAP);
 
 	memcpy(l_mbap->unit, l_src_dsc->data, l_src_dsc->len);			/* Copy RTU PDU part into the MBAP ADU */
 	l_mbap->len = htons(l_src_dsc->len);					/* Correct .len field of the MBAP header */
@@ -483,7 +484,7 @@ const char	*l_src;
 
 	/* Sanity checks for correct framing  */
 	if ( l_src_dsc->len < 3 )							/* Too short ? */
-		return	$LOG(STS$K_ERROR, "Tooshort request (%d < %d octets)", l_src_dsc->len, 3);
+		return	$PUTMSG_FAO(T2R$__REQSHORT, l_src_dsc->len, 3);
 
 	l_src = l_src_dsc->data;
 

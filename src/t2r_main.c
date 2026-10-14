@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-10"
-#define	__REV__		"00.10.00"
+#define	__IDENT__	"X.00-11"
+#define	__REV__		"00.11.00"
 
 /*
 **++
@@ -109,6 +109,12 @@
 **				contrib/99-ftdi-latency.rules is delivered, the User Guides got the FTDI line
 **				in the Troubleshooting.
 **
+**	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only now: every $LOG() is replaced
+**				by $PUTMSG_FAO() with a coded catalogue message (T2R-MSGS: 63 new
+**				records); the settings validation diagnostics are SERxxx/LSNxxx/CFGxxx;
+**				the "Time Stamp responder ... disabled" is -I- now (it is the default);
+**				the message records are initialized by the field names (no warnings with
+**				any StarLet release, whatever the set of the EMSG_RECORD fields is).
 **--
 */
 
@@ -153,7 +159,7 @@ static	EMSG_RECORD __t2r_msgs__ [] = {					/* Create array of message records */
 	 * frame is prefixed by __util$putmsg*() itself (see the .facname below), so the final
 	 * output line looks like: %T2R-E-CRC16ERR, <the record text>
 	 */
-	#define	$DEF_MSG(f, s, c, t)	{ f##$__##c, 0, { #c ", " t } },
+	#define	$DEF_MSG(f, s, c, t)	{ .sts = f##$__##c, .textl = 0, .text = #c ", " t },	/* The rest is stamped by __util$inimsg() */
 	__DEF_MESSAGES__
 	#undef	$DEF_MSG
 };
@@ -244,7 +250,7 @@ static int s_settings_find_n_get_serial (
 			return	*a_serial = &g_serials[i], STS$K_SUCCESS;
 		}
 
-	return	$LOG(STS$K_ERROR, "Target device <%s> has not been defined", a_target);
+	return	$PUTMSG_FAO(T2R$__TGTNDEF, a_target);
 }
 
 
@@ -278,7 +284,7 @@ T2R$_SERIAL	*l_serial;
 char	l_chars[64];
 
 	if ( !(l_setting = config_lookup(a_cfg, "serials")) )
-		return	$LOG(STS$K_ERROR, "No <serials> section --- %s", config_error_text(a_cfg));
+		return	$PUTMSG_FAO(T2R$__CFGNOSECT, "serials", config_error_text(a_cfg));
 
 	l_serial = g_serials;
 
@@ -286,7 +292,7 @@ char	l_chars[64];
 
 	if ( l_count > T2R$K_MAX_SERIALS )					/* Never run out of the g_serials[] capacity */
 		{
-		$LOG(STS$K_WARN, "Only %d of %d <serials> records will be processed", T2R$K_MAX_SERIALS, l_count);
+		$PUTMSG_FAO(T2R$__CFGTRUNC, T2R$K_MAX_SERIALS, l_count, "serials");
 		l_count = T2R$K_MAX_SERIALS;
 		}
 
@@ -297,13 +303,13 @@ char	l_chars[64];
 
 		if ( !(l_args = config_setting_get_elem(l_setting, i)) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d] --- illformed or missing", i);
+			$PUTMSG_FAO(T2R$__SERBADREC, i, "illformed or missing");
 			continue;
 			}
 
 		if ( !config_setting_lookup_string(l_args, "device", &l_str) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d] --- no <device> option", i);
+			$PUTMSG_FAO(T2R$__SERBADREC, i, "no <device> option");
 			continue;
 			}
 
@@ -318,13 +324,13 @@ char	l_chars[64];
 #ifdef HAVE_TIOCRS485
 			l_serial->flags |=  T2R$M_SERIAL_RS485;
 #else
-			$LOG(STS$K_WARN, "[serial #%02d:<%s>] --- RS485 option is not supported", i, l_serial->devname);
+			$PUTMSG_FAO(T2R$__SERNORS485, i, l_serial->devname);
 #endif
 			}
 
 		if ( !config_setting_lookup_string(l_args, "chars", &l_str) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- no <chars> option", i, l_serial->devname);
+			$PUTMSG_FAO(T2R$__SERBADOPT, i, l_serial->devname, "no <chars> option");
 			continue;
 			}
 
@@ -334,7 +340,7 @@ char	l_chars[64];
 		 */
 		if ( sizeof(l_chars) <= (size_t) snprintf(l_chars, sizeof(l_chars), "%s", l_str) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- <chars> value is too long", i, l_serial->devname);
+			$PUTMSG_FAO(T2R$__SERBADOPT, i, l_serial->devname, "<chars> value is too long");
 			continue;
 			}
 
@@ -342,8 +348,7 @@ char	l_chars[64];
 
 		if ( 4 != sscanf(l_chars, "%d,%d,%c,%d", &l_speed, &l_databits, &l_parity, &l_stopbits) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- <chars> value <%s> is illformed", i,
-				l_serial->devname, l_chars);
+			$PUTMSG_FAO(T2R$__SERBADCHR, i, l_serial->devname, l_chars);
 			continue;
 			}
 
@@ -352,22 +357,19 @@ char	l_chars[64];
 		 */
 		if ( !$ISINRANGE(l_speed, T2R$K_BAUD_MIN, T2R$K_BAUD_MAX) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- speed %d baud is out of range [%d..%d]", i,
-				l_serial->devname, l_speed, T2R$K_BAUD_MIN, T2R$K_BAUD_MAX);
+			$PUTMSG_FAO(T2R$__SERRANGE, i, l_serial->devname, "speed (baud)", l_speed, T2R$K_BAUD_MIN, T2R$K_BAUD_MAX);
 			continue;
 			}
 
 		if ( !$ISINRANGE(l_databits, T2R$K_DATABITS_MIN, T2R$K_DATABITS_MAX) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- %d data bits is out of range [%d..%d]", i,
-				l_serial->devname, l_databits, T2R$K_DATABITS_MIN, T2R$K_DATABITS_MAX);
+			$PUTMSG_FAO(T2R$__SERRANGE, i, l_serial->devname, "data bits", l_databits, T2R$K_DATABITS_MIN, T2R$K_DATABITS_MAX);
 			continue;
 			}
 
 		if ( !$ISINRANGE(l_stopbits, T2R$K_STOPBITS_MIN, T2R$K_STOPBITS_MAX) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- %d stop bits is out of range [%d..%d]", i,
-				l_serial->devname, l_stopbits, T2R$K_STOPBITS_MIN, T2R$K_STOPBITS_MAX);
+			$PUTMSG_FAO(T2R$__SERRANGE, i, l_serial->devname, "stop bits", l_stopbits, T2R$K_STOPBITS_MIN, T2R$K_STOPBITS_MAX);
 			continue;
 			}
 
@@ -379,8 +381,7 @@ char	l_chars[64];
 				break;
 
 			default:
-				$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- parity '%c' is unknown, allowed: [N, E, O]", i,
-					l_serial->devname, l_parity);
+				$PUTMSG_FAO(T2R$__SERBADPAR, i, l_serial->devname, 1, &l_parity);
 				continue;
 			}
 
@@ -434,27 +435,23 @@ char	l_chars[64];
 
 		if ( (l_int = pthread_mutex_init(&l_serial->lock, NULL)) )
 			{
-			$LOG(STS$K_ERROR, "[serial #%02d:<%s>] --- pthread_mutex_init()->%d, errno: %d", i,
-				l_serial->devname, l_int, errno);
+			$PUTMSG_FAO(T2R$__DEVSYSERR, l_serial->devname, "pthread_mutex_init()", l_int, errno);
 			continue;
 			}
 
-		$LOG(STS$K_INFO, "Added device #%02d [<%s>, Chars: <%d, %d, %c, %d>, Answer tmo: %d msec, Inter RTU PDU: %d usec] --- added", i,
-			l_serial->devname, l_serial->baud, l_serial->databits, l_serial->parity, l_serial->stopbits,
-			l_serial->anstmo_msec, l_serial->inter_pdu_usec);
+		$PUTMSG_FAO(T2R$__DEVADDED, i, l_serial->devname, l_serial->baud, l_serial->databits, 1, &l_parity,
+			l_serial->stopbits, l_serial->anstmo_msec, l_serial->inter_pdu_usec);
 
 		if ( l_serial->flags &  T2R$M_SERIAL_ADDTS )
-			$LOG(STS$K_INFO, "Time Stamp responder for <%s> [Unit: %d, Function: %d, Base register: %d] --- enabled",
-				l_serial->devname, l_serial->ts_unit_nr, l_serial->ts_fncode, l_serial->ts_base_reg0);
-		else	$LOG(STS$K_WARN, "Time Stamp responder for <%s> --- disabled",
-			l_serial->devname);
+			$PUTMSG_FAO(T2R$__TSENABLED, l_serial->devname, l_serial->ts_unit_nr, l_serial->ts_fncode, l_serial->ts_base_reg0);
+		else	$PUTMSG_FAO(T2R$__TSDISABLED, l_serial->devname);
 
 
 		l_serial++;
 		g_serials_nr++;
 		}
 
-	return	g_serials_nr ? STS$K_SUCCESS : $LOG(STS$K_ERROR, "No serials has been defined!");
+	return	g_serials_nr ? STS$K_SUCCESS : $PUTMSG_FAO(T2R$__NOSERIALS);
 }
 
 
@@ -487,7 +484,7 @@ T2R$_LISTENER	*l_listener;
 char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 	if ( !(l_setting = config_lookup(a_cfg, "listeners")) )
-		return	$LOG(STS$K_ERROR, "No <listeners> section --- %s", config_error_text(a_cfg));
+		return	$PUTMSG_FAO(T2R$__CFGNOSECT, "listeners", config_error_text(a_cfg));
 
 	l_listener = g_listeners;
 
@@ -495,7 +492,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 	if ( l_count > T2R$K_MAX_LISTENERS )					/* Never run out of the g_listeners[] capacity */
 		{
-		$LOG(STS$K_WARN, "Only %d of %d <listeners> records will be processed", T2R$K_MAX_LISTENERS, l_count);
+		$PUTMSG_FAO(T2R$__CFGTRUNC, T2R$K_MAX_LISTENERS, l_count, "listeners");
 		l_count = T2R$K_MAX_LISTENERS;
 		}
 
@@ -506,13 +503,13 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 		if ( !(l_args = config_setting_get_elem(l_setting, i)) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- illformed or missing", i);
+			$PUTMSG_FAO(T2R$__LSNBADREC, i, "illformed or missing");
 			continue;
 			}
 
 		if ( !config_setting_lookup_string(l_args, "bind", &l_str) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- no <bind> option", i);
+			$PUTMSG_FAO(T2R$__LSNBADREC, i, "no <bind> option");
 			continue;
 			}
 
@@ -522,7 +519,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 		 */
 		if ( sizeof(l_bind) <= (size_t) snprintf(l_bind, sizeof(l_bind), "%s", l_str) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- <bind> value is too long", i);
+			$PUTMSG_FAO(T2R$__LSNBADREC, i, "<bind> value is too long");
 			continue;
 			}
 
@@ -530,7 +527,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 		if ( 3 != sscanf(l_bind, "%15[TCPUDPtcpudp]:%31[0-9.]:%7[0-9]", l_proto, l_laddr, l_port) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- <bind> value <%s> is illformed", i, l_bind);
+			$PUTMSG_FAO(T2R$__LSNBADBIND, i, l_bind);
 			continue;
 			}
 
@@ -541,18 +538,17 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 				break;
 
 			case	'U':						/* listen()/accept() on SOCK_DGRAM does not work */
-				$LOG(STS$K_ERROR, "[listener #%02d] --- UDP transport is not implemented yet", i);
+				$PUTMSG_FAO(T2R$__LSNBADREC, i, "UDP transport is not implemented yet");
 				continue;
 
 			default:
-				$LOG(STS$K_ERROR, "[listener #%02d] --- <bind> value <%s> is illformed", i, l_bind);
+				$PUTMSG_FAO(T2R$__LSNBADBIND, i, l_bind);
 				continue;
 			}
 
 		if ( !$ISINRANGE((l_port_nr = atoi(l_port)), T2R$K_PORT_MIN, T2R$K_PORT_MAX) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- port number %d is out of range [%d..%d]", i,
-				l_port_nr, T2R$K_PORT_MIN, T2R$K_PORT_MAX);
+			$PUTMSG_FAO(T2R$__LSNRANGE, i, l_port_nr, T2R$K_PORT_MIN, T2R$K_PORT_MAX);
 			continue;
 			}
 
@@ -561,7 +557,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 		if ( 1 != (l_int = inet_pton(AF_INET, l_laddr, &l_listener->sk.sin_addr)) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- inet_pton(<%s>)->%d, errno: %d", i, l_laddr, l_int, errno);
+			$PUTMSG_FAO(T2R$__LSNBADADDR, i, l_laddr, l_int, errno);
 			continue;
 			}
 
@@ -572,23 +568,21 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 
 		if ( !config_setting_lookup_string(l_args, "target", &l_str) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- no <target> device", i);
+			$PUTMSG_FAO(T2R$__LSNBADREC, i, "no <target> device");
 			continue;
 			}
 
 		if ( !(1 & s_settings_find_n_get_serial (l_str, &l_listener->serial)) )
 			{
-			$LOG(STS$K_ERROR, "[listener #%02d] --- target <%s> has not been define in <serial> section", i, l_str);
+			$PUTMSG_FAO(T2R$__LSNNOTGT, i, l_str);
 			continue;
 			}
 
 		strncpy(l_listener->target, l_str, T2R$K_TTY_DEVNAME);		/* The tail is zeroed by the memset above */
 
 
-		$LOG(STS$K_INFO, "Added listener #%02d [Target: <%s>, Net: <%s:" IPv4_BYTES_FMT ":%d>, I/O Tmo: %d msec, Connection limit: %d] --- added", i,
-			l_listener->serial->devname,
-			(l_listener->proto == IPPROTO_UDP) ? "UDP": "TCP", IPv4_BYTES(l_listener->sk.sin_addr.s_addr), ntohs(l_listener->sk.sin_port),
-			l_listener->iotmo, l_listener->connlm);
+		$PUTMSG_FAO(T2R$__LSNADDED, i, l_listener->serial->devname, (l_listener->proto == IPPROTO_UDP) ? "UDP": "TCP",
+			&l_listener->sk.sin_addr, ntohs(l_listener->sk.sin_port), l_listener->iotmo, l_listener->connlm);
 
 
 		l_listener++;
@@ -596,7 +590,7 @@ char	l_bind[128], l_proto[16], l_laddr[32], l_port[8];
 		}
 
 
-	return	g_listeners_nr ? STS$K_SUCCESS : $LOG(STS$K_ERROR, "No listeners has been defined!");
+	return	g_listeners_nr ? STS$K_SUCCESS : $PUTMSG_FAO(T2R$__NOLSNRS);
 }
 
 
@@ -633,7 +627,7 @@ int	l_rc;
 	/* Read the file. If there is an error, report it and exit. */
 	if( !config_read_file(&g_cfg, a_settings_conf))
 		{
-		$LOG(STS$K_ERROR, "%s:%d - %s, errno: %d", config_error_file(&g_cfg), config_error_line(&g_cfg), config_error_text(&g_cfg), errno);
+		$PUTMSG_FAO(T2R$__CFGPARSE, config_error_file(&g_cfg), config_error_line(&g_cfg), config_error_text(&g_cfg), errno);
 		config_destroy(&g_cfg);
 		return	STS$K_ERROR;
 		}
@@ -763,7 +757,7 @@ const int siglist [] = {SIGTERM, SIGINT, SIGUSR1, SIGQUIT, 0 };
 	for ( int i = 0; siglist[i]; i++)
 		{
 		if ( (signal(siglist[i], s_sig_handler)) == SIG_ERR )
-			$LOG(STS$K_ERROR, "Error establishing handler for signal %d/%#x, error=%d", siglist[i], siglist[i], errno);
+			$PUTMSG_FAO(T2R$__SIGERR, siglist[i], errno);
 
 		$IFTRACE(g_trace, "Set handler for signal %d/%#x (%s)", siglist[i], siglist[i], strsignal(siglist[i]));
 		}
@@ -802,7 +796,7 @@ int l_rc = 0;
 	 * Process command line arguments
 	 */
 	if ( !(1 & __util$getparams(argc, argv, g_optstbl)) )
-		return	$LOG(STS$K_ERROR, "Error processing configuration");
+		return	$PUTMSG_FAO(T2R$__CFGERR);
 
 
 	if ( $ASCLEN(&g_logfspec) )
@@ -816,7 +810,7 @@ int l_rc = 0;
 		__util$showparams(g_optstbl);
 
 	if ( !(1 & s_config_validation()) )
-		return	$LOG(STS$K_FATAL, "Abort execution, check configuration!!!");
+		return	$PUTMSG_FAO(T2R$__CFGABORT);
 
 
 

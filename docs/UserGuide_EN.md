@@ -86,7 +86,7 @@ If a record is wrong, the gateway **skips it and says why** --- with the allowed
 message, for example:
 
 ```
-%T2R-E: [serial #00:</dev/ttyUSB0>] --- speed 31 baud is out of range [50..4000000]
+%T2R-E-SERRANGE, [serial #00:</dev/ttyUSB0>] --- speed (baud) 31 is out of range [50..4000000]
 ```
 
 The record number (`#00`) counts from zero, in the order the records appear in the file.
@@ -127,8 +127,8 @@ A healthy start looks like this (shortened):
 
 ```
 %T2R-I-REVISNF, Rev: T2R X.00-06/aarch64(built at ...) (REV: 00.06.00)
-%T2R-I:  Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added
-%T2R-I:  Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added
+%T2R-I-DEVADDED, Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added
+%T2R-I-LSNADDED, Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added
 %T2R-S-DEVREADY, Device </dev/ttyUSB0> [9600 baud, answer tmo: 1000 msec, t3.5: 4010 usec] --- is ready
 %T2R-S-LSNRRDY, [#3] Listener 0.0.0.0:502 [Target: </dev/ttyUSB0>] --- is ready
 ```
@@ -200,10 +200,11 @@ dislikes.**
 | `%T2R-W-FRAMETMO, [...] Frame is not completed in ...` | The answer started but never finished in time | a very slow or hanging device; raise `iotmo`; check the cable |
 | `CRC16ERR`, `BADFRAME` or `FRAMETMO` now and then, on a USB adapter (FTDI) only; a direct `mbpoll` on the same port is fine | The FTDI adapter gives the answer by pieces, once in 16 msec (its `latency_timer`). Since X.00-10 the gateway waits for the whole answer of the usual functions (01-06, 15, 16, 23), but the other functions are still cut | set `latency_timer` to 1 msec --- it also makes every answer faster: `sudo cp /opt/mbusgw-t2r/share/doc/mbusgw-t2r/99-ftdi-latency.rules /etc/udev/rules.d/`, then `sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb-serial`; check: `cat /sys/bus/usb-serial/devices/ttyUSB0/latency_timer` must print `1` |
 | `%T2R-W-EXCRPT, [...] Report exception 4 (SERVER_DEVICE_FAILURE) ...` | The gateway told the TCP client "the serial side failed" | look at the *previous* log line --- it names the real reason (NOANSWER, CRC16ERR, ...) |
+| `%T2R-E-SESSFAIL, [...] --- cannot start a session thread, pthread_create()->11` | Too many TCP clients at once: every client takes a thread, and systemd limits the service (`TasksMax`, 578 on a small board) | find who keeps so many connections open (`ss -tn`); if they are all real, raise the limit: `TasksMax=2048` in the `[Service]` section of the unit, then `systemctl daemon-reload` |
 | `%T2R-E-LSNRERR, Listener 0.0.0.0:502 --- bind() error, errno: 98` | errno 98 = the TCP port is already taken | another gateway instance is running, or another program owns the port: `sudo ss -tlnp \| grep 502` |
 | the same, `errno: 13` | Ports below 1024 need root | run with `sudo`, or use a port >= 1024 (e.g. 5502) |
-| `%T2R-E: [serial #NN:...] --- ... out of range [a..b]` | A settings value is out of its allowed range | fix the value; the allowed range is right in the message |
-| `%T2R-E: No serials has been defined!` | Not a single `serials` record survived the validation | read the error lines above it --- each rejected record says why |
+| `%T2R-E-SERRANGE, [serial #NN:...] --- ... out of range [a..b]` (or `LSNRANGE`) | A settings value is out of its allowed range | fix the value; the allowed range is right in the message |
+| `%T2R-E-NOSERIALS, No serials has been defined!` | Not a single `serials` record survived the validation | read the error lines above it --- each rejected record says why |
 | The client connects but every answer is an exception `0x04` | See EXCRPT above | the trouble is on the serial side; `/trace` and read backwards |
 | Everything looks fine, but the data is wrong/shifted | Byte order confusion on the client side | MODBUS registers are big-endian 16-bit words; check how your client assembles 32/64-bit values |
 
@@ -224,6 +225,69 @@ dislikes.**
 | `CRC16ERR` | E | The checksum of the received frame does not match; both values are shown |
 | `EXCRPT` | W | A MODBUS exception is being returned to the TCP client; the code and its name are shown |
 | `EXITST` | I | The gateway exits; shows the exit flag and the final status |
+| `SYSERR` | E | A system call failed; its name, the return value and errno are shown. Quote the line when asking for help |
+| `NETSYSERR` | E | A system call on a TCP connection failed (recv, send, poll, accept); the connection is closed |
+| `NETSYSWRN` | W | A socket option cannot be set; the gateway keeps working |
+| `TTYSYSERR` | E | A system call on the serial port failed (poll, read, tcdrain); the request gets exception 4 |
+| `TTYSYSWRN` | W | A minor serial port call failed (tcflush, poll/read while flushing); the gateway keeps working |
+| `DEVSYSERR` | E | A serial port setup call failed (tcgetattr, tcsetattr, cfsetspeed, mutex); the port is not used |
+| `DEVSYSWRN` | W | Waiting for the serial line took too long (pthread_mutex_timedlock); the gateway tries again |
+| `PEERCLOSE` | I | The TCP client has closed the connection --- the normal end of a session |
+| `ALLSENT` | W | Nothing left to send on a TCP connection --- harmless |
+| `BADPROTO` | E | A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed |
+| `PDUSHORT` | E | A TCP request is too short to be a MODBUS request; the connection is closed |
+| `PDULONG` | E | A TCP request is longer than 256 octets; the connection is closed |
+| `IDLETMO` | W | A TCP client has been silent for 20 minutes; the connection is closed |
+| `NETRDTMO` | E | A TCP client started a request but did not finish it in time; the connection is closed |
+| `REQFAIL` | W | A request is answered with a MODBUS exception; the previous lines say why |
+| `NETPOLLEV` | E | A TCP connection broke (poll() reports an error); the connection is closed |
+| `SESSFAIL` | E | No thread for a new TCP client: too many connections at once (see Troubleshooting); the client is dropped |
+| `LSNRABRT` | W | A TCP listener is stopped --- normal at the gateway exit |
+| `TGTOPNERR` | E | A TCP port is not opened because its serial port cannot be opened; the previous line says why |
+| `NOLSNRUP` | E | Not a single TCP port could be opened; the gateway stops |
+| `NOROOM` | E | An answer does not fit into the buffer --- an internal error, please report it |
+| `MBAPLEN` | E | The MBAP length field does not match the received data; the request is rejected |
+| `REQSHORT` | E | A request is too short to be forwarded to the serial line |
+| `TGTNDEF` | E | A listener names a target which is not in the serials section |
+| `CFGNOSECT` | E | The settings file has no serials or listeners section; the gateway stops |
+| `CFGTRUNC` | W | Too many records in a section; only the first ones are used |
+| `SERBADREC` | E | A serials record is broken or has no device; it is skipped |
+| `SERBADOPT` | E | A serials record has no chars, or it is too long; the record is skipped |
+| `SERNORS485` | W | rs485 = 1 is set, but this build has no RS485 support; the option is ignored |
+| `SERBADCHR` | E | The chars value cannot be read; write it like "9600, 8, N, 1" |
+| `SERRANGE` | E | The speed, data bits or stop bits are out of range; the allowed range is in the message |
+| `SERBADPAR` | E | The parity letter is unknown; use N, E or O |
+| `DEVADDED` | I | A serials record is accepted; the line parameters are shown |
+| `TSENABLED` | I | The Time Stamp pseudo device is on for this port |
+| `TSDISABLED` | I | The Time Stamp pseudo device is off for this port (the default) |
+| `NOSERIALS` | E | Not a single serials record survived the validation; the gateway stops |
+| `LSNBADREC` | E | A listeners record is broken (no bind, no target, UDP); it is skipped |
+| `LSNBADBIND` | E | The bind value cannot be read; write it like "TCP:0.0.0.0:502" |
+| `LSNRANGE` | E | The TCP port number is out of range [1..65535] |
+| `LSNBADADDR` | E | The IP address in bind is not a valid IPv4 address |
+| `LSNNOTGT` | E | The target of a listener is not in the serials section; the record is skipped |
+| `LSNADDED` | I | A listeners record is accepted; the address, the port and the target are shown |
+| `NOLSNRS` | E | Not a single listeners record survived the validation; the gateway stops |
+| `CFGPARSE` | E | The settings file cannot be read or has a syntax error; the file name and the line are shown |
+| `SIGERR` | E | A signal handler cannot be set --- an internal error, please report it |
+| `CFGERR` | E | The configuration cannot be processed; the previous lines say why |
+| `CFGABORT` | F | The gateway stops because of the configuration errors above |
+| `DEVLOCKERR` | E | The serial line stayed busy for 39 seconds; the request gets exception 4 |
+| `TXNODATA` | W | An empty request was not sent --- harmless |
+| `XMITERR` | E | The request cannot be written to the serial port; the request gets exception 4 |
+| `XMITSHORT` | E | Only a part of the request has been written to the serial port |
+| `RXBUFFULL` | W | The device sent more than 256 octets; the rest is dropped |
+| `RXNODATA` | E | The answer started but no octet was collected |
+| `RESPMISM` | W | The answer came from another slave or for another function: two masters or two devices with one address |
+| `BADSPEED` | W | The speed is not a standard one; 9600 is used |
+| `NOTTTY` | W | The device is not a serial port |
+| `RS485OFF` | W | The RS485 mode cannot be switched on for this port; the port works without it |
+| `RS485ON` | S | The RS485 mode is on for this port |
+| `DEVINIERR` | E | The serial port cannot be set up; the previous line says why |
+| `DEVINIT` | I | The serial port is set up |
+| `DEVCLSERR` | E | The serial port cannot be closed |
+| `DEVNOTINI` | W | Closing a serial port which was never opened --- harmless |
+| `DEVBUSY` | E | The serial line cannot be taken for a request; the request gets exception 4 |
 
 *(The `S/I/W/E` letter is a part of the printed line: `%T2R-E-CRC16ERR, ...`.)*
 

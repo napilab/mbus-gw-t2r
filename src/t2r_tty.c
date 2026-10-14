@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-TTY"
-#define	__IDENT__	"X.00-10"
-#define	__REV__		"00.10.00"
+#define	__IDENT__	"X.00-11"
+#define	__REV__		"00.11.00"
 
 /*
 **++
@@ -49,6 +49,10 @@
 **				adapters (FTDI) deliver the answer by chunks with gaps up to 16 msec, the
 **				frame was cut by the t3.5 silence - CRC16ERR, BADFRAME.
 **
+**	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only: every $LOG() is replaced by
+**				$PUTMSG_FAO() with a coded message (TTYSYSERR, DEVSYSERR, RESPMISM, ...);
+**				s_tty_open(): the RS485 mode is set by TIOCSRS485 (the second ioctl() was
+**				TIOCGRS485 again - the mode has never been switched on).
 **--
 */
 #include	<time.h>
@@ -103,7 +107,7 @@ int	l_rc;
 	for (int i = 0; i < 3; i++)
 		{
 		if ( (l_rc = clock_gettime(CLOCK_REALTIME_COARSE, &l_now)) )
-			return	$LOG(STS$K_ERROR, "clock_gettime->%d, errno: %d", l_rc, errno);
+			return	$PUTMSG_FAO(T2R$__SYSERR, "clock_gettime()", l_rc, errno);
 
 		__util$add_time (&l_now, &l_tmo, &l_etime);
 
@@ -113,11 +117,11 @@ int	l_rc;
 			return	STS$K_SUCCESS;
 			}
 
-		$LOG(STS$K_WARN, "pthread_mutex_timedlock(<%s>)->%d, errno=%d", a_serial->devname, l_rc, errno);
+		$PUTMSG_FAO(T2R$__DEVSYSWRN, a_serial->devname, "pthread_mutex_timedlock()", l_rc, errno);
 		}
 
 
-	return	$LOG(STS$K_ERROR, "Cannot get exclusive access for <%s> after %d attempts", a_serial->devname, 3);
+	return	$PUTMSG_FAO(T2R$__DEVLOCKERR, a_serial->devname, 3);
 }
 
 
@@ -141,7 +145,7 @@ static inline int s_tty_unlock (
 int	l_rc;
 
 	if ( (l_rc = pthread_mutex_unlock(&a_serial->lock)) )
-		return	$LOG(STS$K_ERROR, "pthread_mutex_unlock(<%s>)->%d, errno: %d", a_serial->devname, l_rc, errno);
+		return	$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "pthread_mutex_unlock()", l_rc, errno);
 
 	return	STS$K_SUCCESS;
 }
@@ -178,7 +182,7 @@ struct timespec l_inter_pdu_ts;
 
 
 	if ( !a_req_pdu->len )
-		return	$LOG(STS$K_WARN, "[#%d:<%s>] No data to send", a_serial->fd, a_serial->devname),
+		return	$PUTMSG_FAO(T2R$__TXNODATA, a_serial->fd, a_serial->devname),
 				STS$K_SUCCESS;
 
 	l_len = 0;									/* Total lenght of data to be sent */
@@ -200,7 +204,7 @@ struct timespec l_inter_pdu_ts;
 	 * perfectly correct frame.
 	 */
 	if ( 0 > (l_rc = tcflush(a_serial->fd, TCIFLUSH)) )
-		$LOG(STS$K_WARN, "[#%d:<%s>] tcflush()->%d, errno: %d", a_serial->fd, a_serial->devname, l_rc, errno);
+		$PUTMSG_FAO(T2R$__TTYSYSWRN, a_serial->fd, a_serial->devname, "tcflush()", l_rc, errno);
 
 
 											/* Predelay ... */
@@ -208,11 +212,9 @@ struct timespec l_inter_pdu_ts;
 
 
 	if ( 0 > (l_rc = writev(a_serial->fd, l_iov,  IOV$K_MAX)) )
-		l_rc = $LOG(STS$K_ERROR, "[#%d:<%s>] Xmit of %d octets failed, writev()->%d, errno: %d",
-				a_serial->fd, a_serial->devname, l_len, l_rc, errno);
+		l_rc = $PUTMSG_FAO(T2R$__XMITERR, a_serial->fd, a_serial->devname, l_len, l_rc, errno);
 	else if ( l_rc != l_len )
-		l_rc = $LOG(STS$K_ERROR, "[#%d:<%s>] Sent %d octets (from %d), errno: %d",
-				a_serial->fd, a_serial->devname, l_rc, l_len, errno);
+		l_rc = $PUTMSG_FAO(T2R$__XMITSHORT, a_serial->fd, a_serial->devname, l_rc, l_len, errno);
 	else	{
 		/*
 		 * Wait until the UART has really shifted out the last octet. On a half duplex RS-485
@@ -220,8 +222,7 @@ struct timespec l_inter_pdu_ts;
 		 * before the frame has been transmitted and would read our own request back.
 		 */
 		if ( 0 > (l_rc = tcdrain(a_serial->fd)) )
-			l_rc = $LOG(STS$K_ERROR, "[#%d:<%s>] tcdrain()->%d, errno: %d",
-					a_serial->fd, a_serial->devname, l_rc, errno);
+			l_rc = $PUTMSG_FAO(T2R$__TTYSYSERR, a_serial->fd, a_serial->devname, "tcdrain()", l_rc, errno);
 		else	l_rc = STS$K_SUCCESS;
 		}
 
@@ -346,8 +347,7 @@ uint8_t	*l_data;
 	if ( 0 > (l_rc = poll(&l_pfd, 1, a_serial->anstmo_msec)) )
 		{
 		if ( errno != EINTR )
-			return	$LOG(STS$K_ERROR, "[#%d:<%s>] poll()->%d, errno: %d", a_serial->fd, a_serial->devname,
-					l_rc, errno);
+			return	$PUTMSG_FAO(T2R$__TTYSYSERR, a_serial->fd, a_serial->devname, "poll()", l_rc, errno);
 		}
 	else if ( !l_rc )
 		return	$PUTMSG_FAO(T2R$__NOANSWER, a_serial->fd, a_serial->devname, a_serial->anstmo_msec);
@@ -387,8 +387,7 @@ uint8_t	*l_data;
 
 		if ( 0 >= (l_space = a_resp_pdu->sz - a_resp_pdu->len) )
 			{
-			$LOG(STS$K_WARN, "[#%d:<%s>] Input buffer is full (%d octets) --- stop reading",
-				a_serial->fd, a_serial->devname, a_resp_pdu->len);
+			$PUTMSG_FAO(T2R$__RXBUFFULL, a_serial->fd, a_serial->devname, a_resp_pdu->len);
 			break;
 			}
 
@@ -397,8 +396,7 @@ uint8_t	*l_data;
 			if ( errno == EINTR )
 				continue;
 
-			return	$LOG(STS$K_ERROR, "[#%d:<%s>] poll()->%d, errno: %d", a_serial->fd, a_serial->devname,
-					l_rc, errno);
+			return	$PUTMSG_FAO(T2R$__TTYSYSERR, a_serial->fd, a_serial->devname, "poll()", l_rc, errno);
 			}
 
 		if ( !l_rc )
@@ -411,8 +409,7 @@ uint8_t	*l_data;
 			if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) || (errno == EINTR) )
 				continue;
 
-			return	$LOG(STS$K_ERROR, "[#%d:<%s>] read()->%d, errno: %d", a_serial->fd, a_serial->devname,
-					l_rc, errno);
+			return	$PUTMSG_FAO(T2R$__TTYSYSERR, a_serial->fd, a_serial->devname, "read()", l_rc, errno);
 			}
 
 		if ( !l_rc )
@@ -435,7 +432,7 @@ uint8_t	*l_data;
 	 * Validate a framing of the has been received data
 	 */
 	if ( !a_resp_pdu->len )
-		return	$LOG(STS$K_ERROR, "[#%d:<%s>] No data has been received", a_serial->fd, a_serial->devname);
+		return	$PUTMSG_FAO(T2R$__RXNODATA, a_serial->fd, a_serial->devname);
 
 	if ( (a_resp_pdu->len < MODBUS$SZ_MINRTU) || (a_resp_pdu->len > MODBUS$SZ_MAXPDU) )
 		return	$PUTMSG_FAO(T2R$__BADFRAME, a_serial->fd, a_serial->devname, a_resp_pdu->len,
@@ -465,8 +462,7 @@ uint8_t	*l_data;
 
 	if ( (l_req_pdu->slave != l_resp_pdu->slave)
 		|| (l_req_pdu->fncode != (l_resp_pdu->fncode & (~MODBUS$M_FN_EXCEPTION))) )
-		return	$LOG(STS$K_WARN, "[#%d:<%s>] Slave: (REQ: %d vs RESP: %d) or Function (REQ: %d vs RESP: %d) --- mismatch",
-				a_serial->fd, a_serial->devname, l_req_pdu->slave, l_resp_pdu->slave,
+		return	$PUTMSG_FAO(T2R$__RESPMISM, a_serial->fd, a_serial->devname, l_req_pdu->slave, l_resp_pdu->slave,
 				l_req_pdu->fncode, l_resp_pdu->fncode);
 
 	a_resp_pdu->len -= 2;							/* Reduce a length of data for CRC16 */
@@ -630,7 +626,7 @@ speed_t l_speed;
 		#endif
 
 		default:
-			$LOG(STS$K_WARN, "Cannot translate speed %d baud to internal representative, set 9600", a_speed);
+			$PUTMSG_FAO(T2R$__BADSPEED, a_speed);
 			l_speed = B9600;
 		}
 
@@ -661,10 +657,10 @@ int	l_rc;
 		return	STS$K_SUCCESS;
 
 	if ( !(l_rc = isatty(a_serial->fd)) )
-		return	$LOG(STS$K_WARN, "isatty(%d)->%d --- invalid I/O descriptor for <%s>", a_serial->fd, l_rc, a_serial->devname);
+		return	$PUTMSG_FAO(T2R$__NOTTTY, a_serial->fd, l_rc, a_serial->devname);
 
 	if ( 0 > (l_rc = tcsetattr(a_serial->fd, TCSAFLUSH, &a_serial->savedtios)))
-		$LOG(STS$K_ERROR, "Error tcsetattr(%s)->%d, errno: %d", a_serial->devname, l_rc, errno);
+		$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "tcsetattr()", l_rc, errno);
 
 	close(a_serial->fd);
 	a_serial->fd = -1;
@@ -713,7 +709,7 @@ int	l_flags = 0, l_rc;
 
 	if ( (l_rc = tcgetattr(a_serial->fd , &a_serial->savedtios)) )
 		return	close(a_serial->fd), a_serial->fd = -1,
-			$LOG(STS$K_ERROR, "Error tcgetattr(%s)->%d, errno: %d", a_serial->devname, l_rc, errno);
+			$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "tcgetattr()", l_rc, errno);
 
 	a_serial->tios = a_serial->savedtios;						/* Make local copy */
 
@@ -726,13 +722,11 @@ int	l_flags = 0, l_rc;
 
 	if ( 0 > ( l_rc = cfsetispeed(&a_serial->tios, l_speed)) )			/* Set line rate */
 		return	close(a_serial->fd ), a_serial->fd = -1,
-			$LOG(STS$K_ERROR, "Error cfsetispeed(%s, %d(%#x))->%d, errno: %d",
-				a_serial->devname, a_serial->baud, l_speed, l_rc, errno);
+			$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "cfsetispeed()", l_rc, errno);
 
 	if ( 0 > ( l_rc = cfsetospeed(&a_serial->tios, l_speed)) )			/* Set line rate */
 		return	close(a_serial->fd ), a_serial->fd = -1,
-			$LOG(STS$K_ERROR, "Error cfsetospeed(%s, %d(%#x))->%d, errno: %d",
-				a_serial->devname, a_serial->baud, l_speed, l_rc, errno);
+			$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "cfsetospeed()", l_rc, errno);
 
 
 	/* C_CFLAG      Control options
@@ -799,7 +793,7 @@ int	l_flags = 0, l_rc;
 
 	if ( tcsetattr(a_serial->fd, TCSANOW, &a_serial->tios) < 0 )
 		return	close(a_serial->fd), a_serial->fd = -1,
-			$LOG(STS$K_ERROR, "tcsetattr <%s>, errno: %d", a_serial->devname, errno);
+			$PUTMSG_FAO(T2R$__DEVSYSERR, a_serial->devname, "tcsetattr()", -1, errno);
 
 
 #ifdef HAVE_TIOCRS485
@@ -812,17 +806,17 @@ int	l_flags = 0, l_rc;
 		if ( 0 > (l_rc = ioctl(a_serial->fd, TIOCGRS485, &rs485conf)) )
 			{
 			a_serial->flags &=  ~T2R$M_SERIAL_RS485;
-			$LOG(STS$K_WARN, "ioctl(<%s>, TIOCGRS485)->%d, errno: %d --- disabled RS485 support", a_serial->devname, l_rc, errno);
+			$PUTMSG_FAO(T2R$__RS485OFF, a_serial->devname, "TIOCGRS485", l_rc, errno);
 			}
 		else	{
 			rs485conf.flags |= SER_RS485_ENABLED;
 
-			if ( 0 > (l_rc = ioctl(a_serial->fd, TIOCGRS485, &rs485conf)) )
+			if ( 0 > (l_rc = ioctl(a_serial->fd, TIOCSRS485, &rs485conf)) )	/* Set, not Get */
 				{
 				a_serial->flags &=  ~T2R$M_SERIAL_RS485;
-				$LOG(STS$K_WARN, "ioctl(<%s>, TIOCGRS485)->%d, errno: %d --- disabled RS485 support", a_serial->devname, l_rc, errno);
+				$PUTMSG_FAO(T2R$__RS485OFF, a_serial->devname, "TIOCSRS485", l_rc, errno);
 				}
-			else	$LOG(STS$K_SUCCESS, "Enabled RS-485 support for %s", a_serial->devname);
+			else	$PUTMSG_FAO(T2R$__RS485ON, a_serial->devname);
 			}
 
 		}
@@ -1018,10 +1012,10 @@ int	t2r$tty_open (
 int	l_rc;
 
 	if ( !(1 & s_tty_lock (a_serial)) )
-		return	$LOG(STS$K_ERROR, "Device <%s> --- cannot be initialized", a_serial->devname);
+		return	$PUTMSG_FAO(T2R$__DEVINIERR, a_serial->devname);
 
 	if ( a_serial->state > T2R$K_STATE_IDLE )
-		l_rc = $LOG(STS$K_INFO, "Device <%s> --- has been initialized", a_serial->devname);
+		l_rc = $PUTMSG_FAO(T2R$__DEVINIT, a_serial->devname);
 	else if ( 1 & (l_rc = s_tty_open (a_serial)) )					/* The state is changed ONLY on success */
 		{
 		a_serial->state = T2R$K_STATE_READY;
@@ -1055,10 +1049,10 @@ int	t2r$tty_close (
 int	l_rc;
 
 	if ( !(1 & s_tty_lock (a_serial)) )
-		return	$LOG(STS$K_ERROR, "[#%d:<%s>] --- close failed", a_serial->fd, a_serial->devname);
+		return	$PUTMSG_FAO(T2R$__DEVCLSERR, a_serial->fd, a_serial->devname);
 
 	if ( !a_serial->state )
-		l_rc = $LOG(STS$K_WARN, "Device <%s>  has not been initialized", a_serial->devname);
+		l_rc = $PUTMSG_FAO(T2R$__DEVNOTINI, a_serial->devname);
 	else	l_rc = s_tty_close (a_serial), a_serial->state = T2R$K_STATE_IDLE;
 
 	s_tty_unlock (a_serial);
@@ -1113,7 +1107,7 @@ char	l_buf[MODBUS$SZ_MAXPDU];
 
 
 		if ( 0 > (l_rc = poll(&l_pfd, 1, 1 + a_serial->inter_pdu_usec / 1000)) )
-			$LOG(STS$K_WARN, "[#%d:<%s>] poll()->%d, errno: %d", a_serial->fd, a_serial->devname, l_rc, errno);
+			$PUTMSG_FAO(T2R$__TTYSYSWRN, a_serial->fd, a_serial->devname, "poll()", l_rc, errno);
 		else	if ( !l_rc)
 			continue;
 
@@ -1123,7 +1117,7 @@ char	l_buf[MODBUS$SZ_MAXPDU];
 			if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) || (errno == EINTR) )
 				continue;
 
-			$LOG(STS$K_WARN, "[#%d:<%s>] read()->%d, errno: %d", a_serial->fd, a_serial->devname, l_rc, errno);
+			$PUTMSG_FAO(T2R$__TTYSYSWRN, a_serial->fd, a_serial->devname, "read()", l_rc, errno);
 			break;
 			}
 		}
@@ -1185,7 +1179,7 @@ MODBUS_REQ_T	*l_req_pdu;
 
 
 	if ( !(1 & s_tty_lock (a_serial)) )
-		return	$LOG(STS$K_ERROR, "[#%d:<%s>] --- cannot be allocated for exclusive I/O", a_serial->fd, a_serial->devname);
+		return	$PUTMSG_FAO(T2R$__DEVBUSY, a_serial->fd, a_serial->devname);
 
 
 	if ( 1 & (l_rc = s_tty_rtu_tx (a_serial, l_req_dsc)) )

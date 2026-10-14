@@ -45,7 +45,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-10'
+VERSION   = 'X.00-11'
 PUBDATE_EN = 'August 2026'
 PUBDATE_RU = 'Август 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -504,7 +504,7 @@ def s_pack_en ():
 		 ], [30*mm, 18*mm, 115*mm], a_mono_cols=(0,)),
 		 P('If a record is wrong, the gateway skips it and says why --- with the allowed range '
 		   'right in the message:'),
-		 C('%T2R-E:  [serial #00:</dev/ttyUSB0>] --- speed 31 baud is out of range [50..4000000]'),
+		 C('%T2R-E-SERRANGE, [serial #00:</dev/ttyUSB0>] --- speed (baud) 31 is out of range [50..4000000]'),
 		 H2('3.2.  The listeners Section'),
 		 tbl(['Key', 'Required', 'Meaning and the allowed values'], [
 			('bind', 'yes', 'Where to listen: TCP:&lt;IP address&gt;:&lt;port&gt;. The port is 1..65535; '
@@ -531,8 +531,8 @@ def s_pack_en ():
 		 ], [42*mm, 121*mm], a_mono_cols=(0,)),
 		 P('A healthy start prints (shortened):'),
 		 C('%T2R-I-REVISNF, Rev: T2R X.00-06/aarch64(built at ...) (REV: 00.06.00)\n'
-		   '%T2R-I:  Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added\n'
-		   '%T2R-I:  Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added\n'
+		   '%T2R-I-DEVADDED, Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added\n'
+		   '%T2R-I-LSNADDED, Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added\n'
 		   '%T2R-S-DEVREADY, Device </dev/ttyUSB0> [9600 baud, answer tmo: 1000 msec, t3.5: 4010 usec] --- is ready\n'
 		   '%T2R-S-LSNRRDY, [#3] Listener 0.0.0.0:502 [Target: </dev/ttyUSB0>] --- is ready'),
 		 P('Two lines matter most: <b>DEVREADY</b> (the port is open) and <b>LSNRRDY</b> (the '
@@ -605,13 +605,17 @@ def s_pack_en ():
 				'device. Raise iotmo; check the cable.'),
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'The gateway told the client "the serial '
 				'side failed". The real reason is in the previous log line (NOANSWER, CRC16ERR ...).'),
+			('%T2R-E-SESSFAIL, ... pthread_create()->11', 'Too many TCP clients at once: every client takes a thread, '
+				'and systemd limits the service (TasksMax, 578 on a small board). Find who keeps so many '
+				'connections (ss -tn); if they are all real, set TasksMax=2048 in the [Service] section '
+				'of the unit and run systemctl daemon-reload.'),
 			('%T2R-E-LSNRERR, ... errno: 98', 'The TCP port is taken: a second gateway instance, or '
 				'another program. Find it: sudo ss -tlnp | grep 502.'),
 			('%T2R-E-LSNRERR, ... errno: 13', 'The ports below 1024 need root. Run with sudo, or '
 				'take a port above 1024 (e.g. 5502).'),
-			('... out of range [a..b]', 'A settings value is out of its range; the allowed range is '
+			('%T2R-E-SERRANGE, ... out of range [a..b]', 'A settings value is out of its range; the allowed range is '
 				'right in the message. Fix the value.'),
-			('No serials has been defined!', 'Not a single serials record survived the validation. '
+			('%T2R-E-NOSERIALS, No serials has been defined!', 'Not a single serials record survived the validation. '
 				'Read the error lines above --- each rejected record says why.'),
 			('The data is wrong or shifted', 'The byte order confusion on the client side: the MODBUS '
 				'registers are the big-endian 16-bit words; check how the client assembles the '
@@ -639,6 +643,69 @@ def s_pack_en ():
 			('EXCRPT', 'W', 'A MODBUS exception is returned to the TCP client; the code and its '
 				'name are shown.'),
 			('EXITST', 'I', 'The gateway exits; the exit flag and the final status are shown.'),
+			('SYSERR', 'E', 'A system call failed; its name, the return value and errno are shown. Quote the line when asking for help.'),
+			('NETSYSERR', 'E', 'A system call on a TCP connection failed (recv, send, poll, accept); the connection is closed.'),
+			('NETSYSWRN', 'W', 'A socket option cannot be set; the gateway keeps working.'),
+			('TTYSYSERR', 'E', 'A system call on the serial port failed (poll, read, tcdrain); the request gets exception 4.'),
+			('TTYSYSWRN', 'W', 'A minor serial port call failed (tcflush, poll/read while flushing); the gateway keeps working.'),
+			('DEVSYSERR', 'E', 'A serial port setup call failed (tcgetattr, tcsetattr, cfsetspeed, mutex); the port is not used.'),
+			('DEVSYSWRN', 'W', 'Waiting for the serial line took too long (pthread_mutex_timedlock); the gateway tries again.'),
+			('PEERCLOSE', 'I', 'The TCP client has closed the connection — the normal end of a session.'),
+			('ALLSENT', 'W', 'Nothing left to send on a TCP connection — harmless.'),
+			('BADPROTO', 'E', 'A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed.'),
+			('PDUSHORT', 'E', 'A TCP request is too short to be a MODBUS request; the connection is closed.'),
+			('PDULONG', 'E', 'A TCP request is longer than 256 octets; the connection is closed.'),
+			('IDLETMO', 'W', 'A TCP client has been silent for 20 minutes; the connection is closed.'),
+			('NETRDTMO', 'E', 'A TCP client started a request but did not finish it in time; the connection is closed.'),
+			('REQFAIL', 'W', 'A request is answered with a MODBUS exception; the previous lines say why.'),
+			('NETPOLLEV', 'E', 'A TCP connection broke (poll() reports an error); the connection is closed.'),
+			('SESSFAIL', 'E', 'No thread for a new TCP client: too many connections at once (see Troubleshooting); the client is dropped.'),
+			('LSNRABRT', 'W', 'A TCP listener is stopped — normal at the gateway exit.'),
+			('TGTOPNERR', 'E', 'A TCP port is not opened because its serial port cannot be opened; the previous line says why.'),
+			('NOLSNRUP', 'E', 'Not a single TCP port could be opened; the gateway stops.'),
+			('NOROOM', 'E', 'An answer does not fit into the buffer — an internal error, please report it.'),
+			('MBAPLEN', 'E', 'The MBAP length field does not match the received data; the request is rejected.'),
+			('REQSHORT', 'E', 'A request is too short to be forwarded to the serial line.'),
+			('TGTNDEF', 'E', 'A listener names a target which is not in the serials section.'),
+			('CFGNOSECT', 'E', 'The settings file has no serials or listeners section; the gateway stops.'),
+			('CFGTRUNC', 'W', 'Too many records in a section; only the first ones are used.'),
+			('SERBADREC', 'E', 'A serials record is broken or has no device; it is skipped.'),
+			('SERBADOPT', 'E', 'A serials record has no chars, or it is too long; the record is skipped.'),
+			('SERNORS485', 'W', 'rs485 = 1 is set, but this build has no RS485 support; the option is ignored.'),
+			('SERBADCHR', 'E', 'The chars value cannot be read; write it like "9600, 8, N, 1".'),
+			('SERRANGE', 'E', 'The speed, data bits or stop bits are out of range; the allowed range is in the message.'),
+			('SERBADPAR', 'E', 'The parity letter is unknown; use N, E or O.'),
+			('DEVADDED', 'I', 'A serials record is accepted; the line parameters are shown.'),
+			('TSENABLED', 'I', 'The Time Stamp pseudo device is on for this port.'),
+			('TSDISABLED', 'I', 'The Time Stamp pseudo device is off for this port (the default).'),
+			('NOSERIALS', 'E', 'Not a single serials record survived the validation; the gateway stops.'),
+			('LSNBADREC', 'E', 'A listeners record is broken (no bind, no target, UDP); it is skipped.'),
+			('LSNBADBIND', 'E', 'The bind value cannot be read; write it like "TCP:0.0.0.0:502".'),
+			('LSNRANGE', 'E', 'The TCP port number is out of range [1..65535].'),
+			('LSNBADADDR', 'E', 'The IP address in bind is not a valid IPv4 address.'),
+			('LSNNOTGT', 'E', 'The target of a listener is not in the serials section; the record is skipped.'),
+			('LSNADDED', 'I', 'A listeners record is accepted; the address, the port and the target are shown.'),
+			('NOLSNRS', 'E', 'Not a single listeners record survived the validation; the gateway stops.'),
+			('CFGPARSE', 'E', 'The settings file cannot be read or has a syntax error; the file name and the line are shown.'),
+			('SIGERR', 'E', 'A signal handler cannot be set — an internal error, please report it.'),
+			('CFGERR', 'E', 'The configuration cannot be processed; the previous lines say why.'),
+			('CFGABORT', 'F', 'The gateway stops because of the configuration errors above.'),
+			('DEVLOCKERR', 'E', 'The serial line stayed busy for 39 seconds; the request gets exception 4.'),
+			('TXNODATA', 'W', 'An empty request was not sent — harmless.'),
+			('XMITERR', 'E', 'The request cannot be written to the serial port; the request gets exception 4.'),
+			('XMITSHORT', 'E', 'Only a part of the request has been written to the serial port.'),
+			('RXBUFFULL', 'W', 'The device sent more than 256 octets; the rest is dropped.'),
+			('RXNODATA', 'E', 'The answer started but no octet was collected.'),
+			('RESPMISM', 'W', 'The answer came from another slave or for another function: two masters or two devices with one address.'),
+			('BADSPEED', 'W', 'The speed is not a standard one; 9600 is used.'),
+			('NOTTTY', 'W', 'The device is not a serial port.'),
+			('RS485OFF', 'W', 'The RS485 mode cannot be switched on for this port; the port works without it.'),
+			('RS485ON', 'S', 'The RS485 mode is on for this port.'),
+			('DEVINIERR', 'E', 'The serial port cannot be set up; the previous line says why.'),
+			('DEVINIT', 'I', 'The serial port is set up.'),
+			('DEVCLSERR', 'E', 'The serial port cannot be closed.'),
+			('DEVNOTINI', 'W', 'Closing a serial port which was never opened — harmless.'),
+			('DEVBUSY', 'E', 'The serial line cannot be taken for a request; the request gets exception 4.'),
 		 ], [26*mm, 10*mm, 127*mm], a_mono_cols=(0,)),
 		 H2('7.3.  If Nothing Helps'),
 		 P('Collect and attach to your question: 1) the full start-up log with /trace (from '
@@ -788,7 +855,7 @@ def s_pack_ru ():
 		 ], [30*mm, 14*mm, 119*mm], a_mono_cols=(0,)),
 		 P('Если запись неправильная, шлюз пропускает её и говорит почему — с допустимым '
 		   'диапазоном прямо в сообщении:'),
-		 C('%T2R-E:  [serial #00:</dev/ttyUSB0>] --- speed 31 baud is out of range [50..4000000]'),
+		 C('%T2R-E-SERRANGE, [serial #00:</dev/ttyUSB0>] --- speed (baud) 31 is out of range [50..4000000]'),
 		 H2('3.2.  Раздел listeners'),
 		 tbl(['Ключ', 'Обяз.', 'Значение и допустимые величины'], [
 			('bind', 'да', 'Где слушать: TCP:&lt;IP-адрес&gt;:&lt;порт&gt;. Порт 1..65535; '
@@ -814,8 +881,8 @@ def s_pack_ru ():
 		 ], [42*mm, 121*mm], a_mono_cols=(0,)),
 		 P('Здоровый запуск печатает (сокращённо):'),
 		 C('%T2R-I-REVISNF, Rev: T2R X.00-06/aarch64(built at ...) (REV: 00.06.00)\n'
-		   '%T2R-I:  Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added\n'
-		   '%T2R-I:  Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added\n'
+		   '%T2R-I-DEVADDED, Added device #00 [</dev/ttyUSB0>, Chars: <9600, 8, N, 1>, ...] --- added\n'
+		   '%T2R-I-LSNADDED, Added listener #00 [Target: </dev/ttyUSB0>, Net: <TCP:0.0.0.0:502>, ...] --- added\n'
 		   '%T2R-S-DEVREADY, Device </dev/ttyUSB0> [9600 baud, answer tmo: 1000 msec, t3.5: 4010 usec] --- is ready\n'
 		   '%T2R-S-LSNRRDY, [#3] Listener 0.0.0.0:502 [Target: </dev/ttyUSB0>] --- is ready'),
 		 P('Важнее всего две строки: <b>DEVREADY</b> (порт открыт) и <b>LSNRRDY</b> (TCP-порт '
@@ -886,13 +953,17 @@ def s_pack_ru ():
 			('%T2R-W-EXCRPT, ... (SERVER_DEVICE_FAILURE)', 'Шлюз сообщил клиенту «на '
 				'последовательной стороне сбой». Настоящая причина — в предыдущей строке журнала '
 				'(NOANSWER, CRC16ERR ...).'),
+			('%T2R-E-SESSFAIL, ... pthread_create()->11', 'Слишком много TCP-клиентов сразу: каждому нужен поток, '
+				'а systemd ограничивает сервис (TasksMax, на маленькой плате 578). Найдите, кто держит '
+				'столько соединений (ss -tn); если все настоящие — поставьте TasksMax=2048 в разделе '
+				'[Service] юнита и выполните systemctl daemon-reload.'),
 			('%T2R-E-LSNRERR, ... errno: 98', 'TCP-порт занят: второй экземпляр шлюза или другая '
 				'программа. Найдите: sudo ss -tlnp | grep 502.'),
 			('%T2R-E-LSNRERR, ... errno: 13', 'Порты ниже 1024 требуют root. Запустите под sudo '
 				'или возьмите порт выше 1024 (например 5502).'),
-			('... out of range [a..b]', 'Значение в настройках вне диапазона; допустимый диапазон '
+			('%T2R-E-SERRANGE, ... out of range [a..b]', 'Значение в настройках вне диапазона; допустимый диапазон '
 				'написан прямо в сообщении. Исправьте значение.'),
-			('No serials has been defined!', 'Ни одна запись serials не прошла проверку. Читайте '
+			('%T2R-E-NOSERIALS, No serials has been defined!', 'Ни одна запись serials не прошла проверку. Читайте '
 				'строки ошибок выше — каждая отброшенная запись объясняет причину.'),
 			('Данные неверные или сдвинутые', 'Путаница порядка байт у клиента: регистры MODBUS — '
 				'16-битные слова big-endian; проверьте, как клиент собирает 32/64-битные значения.'),
@@ -915,6 +986,69 @@ def s_pack_ru ():
 			('CRC16ERR', 'E', 'Контрольная сумма принятого кадра не сходится; показаны оба значения.'),
 			('EXCRPT', 'W', 'TCP-клиенту возвращается MODBUS-исключение; показаны код и его имя.'),
 			('EXITST', 'I', 'Шлюз завершается; показаны флаг выхода и итоговый статус.'),
+			('SYSERR', 'E', 'Сбой системного вызова; показаны его имя, код возврата и errno. Приложите строку к вопросу.'),
+			('NETSYSERR', 'E', 'Сбой системного вызова на TCP-соединении (recv, send, poll, accept); соединение закрывается.'),
+			('NETSYSWRN', 'W', 'Не удалось установить опцию сокета; шлюз продолжает работу.'),
+			('TTYSYSERR', 'E', 'Сбой системного вызова на последовательном порту (poll, read, tcdrain); запрос получает исключение 4.'),
+			('TTYSYSWRN', 'W', 'Сбой второстепенного вызова на порту (tcflush, poll/read при очистке); шлюз продолжает работу.'),
+			('DEVSYSERR', 'E', 'Сбой вызова настройки порта (tcgetattr, tcsetattr, cfsetspeed, mutex); порт не используется.'),
+			('DEVSYSWRN', 'W', 'Ожидание последовательной линии затянулось (pthread_mutex_timedlock); шлюз пробует снова.'),
+			('PEERCLOSE', 'I', 'TCP-клиент закрыл соединение — обычное окончание сеанса.'),
+			('ALLSENT', 'W', 'На TCP-соединении нечего отправлять — безвредно.'),
+			('BADPROTO', 'E', 'У TCP-запроса ненулевой идентификатор протокола MBAP: клиент говорит не на MODBUS TCP; соединение закрывается.'),
+			('PDUSHORT', 'E', 'TCP-запрос слишком короткий для MODBUS; соединение закрывается.'),
+			('PDULONG', 'E', 'TCP-запрос длиннее 256 октетов; соединение закрывается.'),
+			('IDLETMO', 'W', 'TCP-клиент молчал 20 минут; соединение закрывается.'),
+			('NETRDTMO', 'E', 'TCP-клиент начал запрос, но не закончил его вовремя; соединение закрывается.'),
+			('REQFAIL', 'W', 'На запрос ответили исключением MODBUS; причина — в строках выше.'),
+			('NETPOLLEV', 'E', 'TCP-соединение оборвалось (poll() сообщает об ошибке); соединение закрывается.'),
+			('SESSFAIL', 'E', 'Нет потока для нового TCP-клиента: слишком много соединений сразу (см. Траблшутинг); клиент сбрасывается.'),
+			('LSNRABRT', 'W', 'TCP-порт закрыт — при остановке шлюза это нормально.'),
+			('TGTOPNERR', 'E', 'TCP-порт не открыт, потому что не открылся его последовательный порт; причина — в строке выше.'),
+			('NOLSNRUP', 'E', 'Не открылся ни один TCP-порт; шлюз останавливается.'),
+			('NOROOM', 'E', 'Ответ не помещается в буфер — внутренняя ошибка, сообщите о ней.'),
+			('MBAPLEN', 'E', 'Поле длины MBAP не совпадает с принятыми данными; запрос отклоняется.'),
+			('REQSHORT', 'E', 'Запрос слишком короткий, чтобы передать его в линию.'),
+			('TGTNDEF', 'E', 'Слушатель ссылается на устройство, которого нет в разделе serials.'),
+			('CFGNOSECT', 'E', 'В файле настроек нет раздела serials или listeners; шлюз останавливается.'),
+			('CFGTRUNC', 'W', 'Слишком много записей в разделе; используются только первые.'),
+			('SERBADREC', 'E', 'Запись serials повреждена или без device; пропускается.'),
+			('SERBADOPT', 'E', 'В записи serials нет chars или значение слишком длинное; запись пропускается.'),
+			('SERNORS485', 'W', 'Задано rs485 = 1, но эта сборка без поддержки RS485; опция игнорируется.'),
+			('SERBADCHR', 'E', 'Значение chars не разобрано; пишите так: "9600, 8, N, 1".'),
+			('SERRANGE', 'E', 'Скорость, биты данных или стоп-биты вне диапазона; допустимый диапазон — в сообщении.'),
+			('SERBADPAR', 'E', 'Неизвестная буква чётности; используйте N, E или O.'),
+			('DEVADDED', 'I', 'Запись serials принята; показаны параметры линии.'),
+			('TSENABLED', 'I', 'Псевдоустройство меток времени включено для этого порта.'),
+			('TSDISABLED', 'I', 'Псевдоустройство меток времени выключено для этого порта (по умолчанию).'),
+			('NOSERIALS', 'E', 'Ни одна запись serials не прошла проверку; шлюз останавливается.'),
+			('LSNBADREC', 'E', 'Запись listeners повреждена (нет bind, нет target, UDP); пропускается.'),
+			('LSNBADBIND', 'E', 'Значение bind не разобрано; пишите так: "TCP:0.0.0.0:502".'),
+			('LSNRANGE', 'E', 'Номер TCP-порта вне диапазона [1..65535].'),
+			('LSNBADADDR', 'E', 'IP-адрес в bind — не правильный адрес IPv4.'),
+			('LSNNOTGT', 'E', 'Устройства из target нет в разделе serials; запись пропускается.'),
+			('LSNADDED', 'I', 'Запись listeners принята; показаны адрес, порт и устройство.'),
+			('NOLSNRS', 'E', 'Ни одна запись listeners не прошла проверку; шлюз останавливается.'),
+			('CFGPARSE', 'E', 'Файл настроек не читается или с синтаксической ошибкой; показаны имя файла и строка.'),
+			('SIGERR', 'E', 'Не удалось установить обработчик сигнала — внутренняя ошибка, сообщите о ней.'),
+			('CFGERR', 'E', 'Конфигурацию не удалось обработать; причина — в строках выше.'),
+			('CFGABORT', 'F', 'Шлюз останавливается из-за ошибок конфигурации выше.'),
+			('DEVLOCKERR', 'E', 'Последовательная линия была занята 39 секунд; запрос получает исключение 4.'),
+			('TXNODATA', 'W', 'Пустой запрос не отправлен — безвредно.'),
+			('XMITERR', 'E', 'Запрос не записался в последовательный порт; запрос получает исключение 4.'),
+			('XMITSHORT', 'E', 'В последовательный порт записалась только часть запроса.'),
+			('RXBUFFULL', 'W', 'Устройство прислало больше 256 октетов; остаток отброшен.'),
+			('RXNODATA', 'E', 'Ответ начался, но не собрано ни одного октета.'),
+			('RESPMISM', 'W', 'Ответ пришёл от другого slave или на другую функцию: два мастера или два устройства с одним адресом.'),
+			('BADSPEED', 'W', 'Скорость нестандартная; используется 9600.'),
+			('NOTTTY', 'W', 'Устройство — не последовательный порт.'),
+			('RS485OFF', 'W', 'Режим RS485 для этого порта не включился; порт работает без него.'),
+			('RS485ON', 'S', 'Режим RS485 для этого порта включён.'),
+			('DEVINIERR', 'E', 'Последовательный порт не настроился; причина — в строке выше.'),
+			('DEVINIT', 'I', 'Последовательный порт настроен.'),
+			('DEVCLSERR', 'E', 'Последовательный порт не закрылся.'),
+			('DEVNOTINI', 'W', 'Закрытие порта, который не открывался — безвредно.'),
+			('DEVBUSY', 'E', 'Последовательную линию не удалось занять под запрос; запрос получает исключение 4.'),
 		 ], [26*mm, 11*mm, 126*mm], a_mono_cols=(0,)),
 		 H2('7.3.  Если ничего не помогло'),
 		 P('Соберите и приложите к вопросу: 1) полный журнал запуска с /trace (от REVISNF до '

@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-09"
-#define	__REV__		"00.09.00"
+#define	__IDENT__	"X.00-11"
+#define	__REV__		"00.11.00"
 
 /*
 **++
@@ -45,6 +45,9 @@
 **				a client session: it is logged as -I- instead of -W-; the routines still
 **				return STS$K_WARN, so the session is closed as before.
 **
+**	14-OCT-2026	RRL	X.00-11 / REV: 00.11.00 - The logging is FAO-only: every $LOG() is replaced by
+**				$PUTMSG_FAO() with a coded message (PEERCLOSE, NETSYSERR, SESSFAIL, ...);
+**				the dead commented-out $LOG() in s_net_recvn() is removed.
 **--
 */
 
@@ -102,16 +105,14 @@ static int	s_net_recvn (
 int	l_rc;
 T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
-//	if ( !a_session->datalen )							/* Just to check that we need to do anything ? */
-//		return	$LOG(STS$K_WARN, "[#%d] --- no data to be read", a_session->sd), STS$K_SUCCESS;
 
 
 											/* Read a data from socket */
 	if ( !(l_rc = recv(a_session->sd, l_netbuf_dsc->data + l_netbuf_dsc->len, a_session->datalen, MSG_NOSIGNAL)) )
-		return	$LOG(STS$K_INFO, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno), STS$K_WARN;
+		return	$PUTMSG_FAO(T2R$__PEERCLOSE, a_session->sd), STS$K_WARN;
 
 	if ( 0 > l_rc )									/* Check return status */
-		return	$LOG(STS$K_ERROR, "[#%d] --- error during read data, recv()->%d, errno: %d", a_session->sd, l_rc, errno);
+		return	$PUTMSG_FAO(T2R$__NETSYSERR, a_session->sd, "recv()", l_rc, errno);
 
 
 	l_netbuf_dsc->len += l_rc;							/* Adjust count of data in the buffer */
@@ -146,15 +147,15 @@ int	l_rc;
 T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
 	if ( a_session->datalen == l_netbuf_dsc->len )					/* Just to check that we need to do anything ? */
-		return	$LOG(STS$K_WARN, "[#%d] --- all data has been sent (%d octets)", a_session->sd, a_session->datalen), STS$K_SUCCESS;
+		return	$PUTMSG_FAO(T2R$__ALLSENT, a_session->sd, a_session->datalen), STS$K_SUCCESS;
 
 
 											/* Read a data from socket */
 	if ( !(l_rc = send(a_session->sd, l_netbuf_dsc->data + a_session->datalen, l_netbuf_dsc->len - a_session->datalen, MSG_NOSIGNAL)) )
-		return	$LOG(STS$K_INFO, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno), STS$K_WARN;
+		return	$PUTMSG_FAO(T2R$__PEERCLOSE, a_session->sd), STS$K_WARN;
 
 	if ( 0 > l_rc )									/* Check return status */
-		return	$LOG(STS$K_ERROR, "[#%d] --- error during send data, send()->%d, errno: %d", a_session->sd, l_rc, errno);
+		return	$PUTMSG_FAO(T2R$__NETSYSERR, a_session->sd, "send()", l_rc, errno);
 
 
 	a_session->datalen += l_rc;							/* Adjust data to be send at next iteration ? */
@@ -207,19 +208,17 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 	l_mbaph = (MODBUS_ADU_T *) l_netbuf_dsc->data;
 
 	if ( ntohs(l_mbaph->proto) )							/* 0 - is the MODBUS protocol identifier */
-		return	$LOG(STS$K_ERROR, "[#%d] --- unexpected protocol identifier %d", a_session->sd,
-				ntohs(l_mbaph->proto));
+		return	$PUTMSG_FAO(T2R$__BADPROTO, a_session->sd, ntohs(l_mbaph->proto));
 
 	l_len = ntohs(l_mbaph->len);							/* Get length of the MBAP data part */
 
 	if ( 2 > l_len )								/* Unit + at least a function code */
-		return	$LOG(STS$K_ERROR, "[#%d] --- MODBUS PDU is too short (%d octets)", a_session->sd, l_len);
+		return	$PUTMSG_FAO(T2R$__PDUSHORT, a_session->sd, l_len);
 
 	l_len -= 1;									/* Unit field is already there */
 
 	if ( l_len > MODBUS$SZ_MAXPDU )
-		return	$LOG(STS$K_ERROR, "[#%d] --- MODBUS PDU is too long (%d > %d octets)", a_session->sd,
-				l_len, MODBUS$SZ_MAXPDU );
+		return	$PUTMSG_FAO(T2R$__PDULONG, a_session->sd, l_len, MODBUS$SZ_MAXPDU);
 
 	if ( l_netbuf_dsc->len == (l_len + MODBUS$SZ_MINMBAP) )			     	/* Is the whole MODBAS PDU in the buffer already ? */
 		return	T2R$__FULLMBAP;
@@ -325,14 +324,13 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 			{
 			if ( (l_session->lastio_ts.tv_sec + T2R$K_IDLE_TMO_SEC) < l_now.tv_sec)	/* 1200 secs for idle session */
 				{
-				$LOG(STS$K_WARN, "[#%d] No activity for past %d seconds", l_session->sd, T2R$K_IDLE_TMO_SEC);
+				$PUTMSG_FAO(T2R$__IDLETMO, l_session->sd, T2R$K_IDLE_TMO_SEC);
 				break;
 				}
 			}
 		else if ( (l_session->lastio_ts.tv_sec + T2R$K_NET_TMO_SEC) < l_now.tv_sec)	/* 3 secs for read\write MBAP */
 				{
-				$LOG(STS$K_ERROR, "[#%d] No data read (%d octets) in  %d seconds",
-				     l_session->sd, l_session->datalen, T2R$K_NET_TMO_SEC );
+				$PUTMSG_FAO(T2R$__NETRDTMO, l_session->sd, l_session->datalen, T2R$K_NET_TMO_SEC);
 				break;
 				}
 
@@ -376,8 +374,7 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 
 
 				if ( l_excode )
-					$LOG(STS$K_WARN, "[#%d] Request processing failed --- MODBUS's exception: %d/%#x",
-					     l_session->sd, l_excode, l_excode);
+					$PUTMSG_FAO(T2R$__REQFAIL, l_session->sd, l_excode, l_excode);
 
 				if ( !(1 & (l_rc = t2r$rtu_pdu_2_mbap (&l_rtu_resp_dsc, &l_netbuf_dsc)) ) )
 					break;
@@ -424,12 +421,12 @@ $DESCRIPTOR_S	(l_rtu_resp_dsc, (2*MODBUS$SZ_MAXPDU));
 			if ( errno == EINTR )
 				continue;
 
-			$LOG(STS$K_ERROR, "[#%d] poll()->%d, errno: %d", l_session->sd, l_rc, errno);
+			$PUTMSG_FAO(T2R$__NETSYSERR, l_session->sd, "poll()", l_rc, errno);
 			break;							/* A persistent error would give a busy loop */
 			}
 		else if ( l_pfd.revents & (POLLERR | POLLHUP | POLLNVAL) )
 			{
-			$LOG(STS$K_ERROR, "[#%d] poll()->%d, .revents: %#x, errno: %d", l_session->sd, l_rc, l_pfd.revents, errno);
+			$PUTMSG_FAO(T2R$__NETPOLLEV, l_session->sd, l_rc, l_pfd.revents, errno);
 			break;
 			}
 		else if (l_rc)
@@ -488,7 +485,7 @@ pthread_t	l_tid;
 			if ( errno == EINTR )
 				continue;
 
-			$LOG(STS$K_ERROR, "poll()->%d, errno: %d --- listener is aborted", l_rc, errno);
+			$PUTMSG_FAO(T2R$__SYSERR, "poll(listeners)", l_rc, errno);
 			break;								/* A persistent error would give a busy loop */
 			}
 
@@ -506,20 +503,19 @@ pthread_t	l_tid;
 				l_slen = sizeof(l_sk);					/* accept() updates it - reset before every call */
 
 				if ( 0 > (l_sd = accept(s_pfd_lsnr[i].fd, (struct sockaddr *) &l_sk, &l_slen)) )
-					$LOG(STS$K_ERROR, "accept(%d)->%d, errno: %d", s_pfd_lsnr[i].fd, l_sd, errno);
+					$PUTMSG_FAO(T2R$__NETSYSERR, s_pfd_lsnr[i].fd, "accept()", l_sd, errno);
 				else	{						/* Create new session context */
 					$PUTMSG_FAO(T2R$__NETCONN, l_sd, &l_sk.sin_addr, ntohs(l_sk.sin_port),
 						s_pfd_lsnr[i].fd);
 
 					if ( (l_rc = setsockopt(l_sd, IPPROTO_TCP, TCP_NODELAY, (char *) &s_one, sizeof(s_one))) )
-						$LOG(STS$K_WARN, "setsockopt()->%d, errno=%d", l_rc, errno);
+						$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(TCP_NODELAY)", l_rc, errno);
 
 
 					if ( !(l_session = calloc(1, sizeof(T2R$_SESSION))) )
 						{
 						close(l_sd);
-						$LOG(STS$K_ERROR, "calloc(%d octets)->NULL, errno: %d",
-							(int) sizeof(T2R$_SESSION), errno);
+						$PUTMSG_FAO(T2R$__SYSERR, "calloc(session)", 0, errno);
 						continue;
 						}
 
@@ -530,7 +526,7 @@ pthread_t	l_tid;
 											/* Start dedicated thread for session */
 					if ( (l_rc = pthread_create(&l_tid, NULL, s_net_session, l_session)) )
 						{
-						$LOG(STS$K_ERROR, "Cannot start network session thread, pthread_create()->%d, errno=%d", l_rc, errno);
+						$PUTMSG_FAO(T2R$__SESSFAIL, l_sd, &l_sk.sin_addr, ntohs(l_sk.sin_port), l_rc);
 						close(l_sd);
 						free(l_session);
 						}
@@ -573,8 +569,7 @@ int	l_rc;
 		close(s_pfd_lsnr[i].fd);
 		s_pfd_lsnr[i].fd = -1;
 
-		$LOG(STS$K_WARN, "[#%d] Listener " IPv4_BYTES_FMT ":%d --- is aborted", s_pfd_lsnr[i].fd,
-					 IPv4_BYTES(g_listeners[i].sk.sin_addr.s_addr), ntohs(g_listeners[i].sk.sin_port) );
+		$PUTMSG_FAO(T2R$__LSNRABRT, s_pfd_lsnr[i].fd, &g_listeners[i].sk.sin_addr, ntohs(g_listeners[i].sk.sin_port));
 		}
 
 	/*
@@ -587,7 +582,7 @@ int	l_rc;
 			continue;
 
 		if ( !(1 & (l_rc = t2r$tty_close (&g_serials[i]))) )
-			$LOG(STS$K_ERROR, "Error close target <%s>", g_serials[i].devname);
+			$PUTMSG_FAO(T2R$__DEVCLSERR, g_serials[i].fd, g_serials[i].devname);
 		}
 
 	return	STS$K_SUCCESS;
@@ -634,13 +629,13 @@ pthread_t	l_tid;
 
 
 		if ( 0 > (l_sd = socket(AF_INET, ((l_listener->proto == IPPROTO_UDP) ? SOCK_DGRAM : SOCK_STREAM), 0)) )
-				return	$LOG(STS$K_ERROR, "socket()->%d, errno=%d", l_sd, errno);
+				return	$PUTMSG_FAO(T2R$__SYSERR, "socket()", l_sd, errno);
 
 		if( 0 > setsockopt(l_sd, SOL_SOCKET, SO_REUSEADDR, (char *)&l_one, sizeof(l_one))  )
-			$LOG(STS$K_WARN, "setsockopt(%d, SO_REUSEADDR), errno=%d", l_sd, errno);
+			$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(SO_REUSEADDR)", -1, errno);
 
 		if( 0 > setsockopt(l_sd, SOL_SOCKET, SO_REUSEPORT, (char *)&l_one, sizeof(l_one))  )
-			$LOG(STS$K_WARN, "setsockopt(%d, SO_REUSEPORT), errno=%d", l_sd, errno);
+			$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(SO_REUSEPORT)", -1, errno);
 
 		if ( 0 > bind(l_sd, (struct sockaddr*) &l_listener->sk, l_slen) )
 			{
@@ -667,7 +662,7 @@ pthread_t	l_tid;
 		if ( !(1 & (l_rc = t2r$tty_open (l_listener->serial))) )
 			{
 			close(l_sd);							/* Don't leak the descriptor */
-			$LOG(STS$K_ERROR, "Error open target <%s>", l_listener->serial->devname);
+			$PUTMSG_FAO(T2R$__TGTOPNERR, &l_listener->sk.sin_addr, ntohs(l_listener->sk.sin_port), l_listener->serial->devname);
 
 			continue;
 			}
@@ -686,11 +681,11 @@ pthread_t	l_tid;
 
 
 	if ( !l_count )
-		return	$LOG(STS$K_ERROR, "No listeners has been started!");
+		return	$PUTMSG_FAO(T2R$__NOLSNRUP);
 
 
 	if ( (l_rc = pthread_create(&l_tid, NULL, s_net_listener, NULL)) )
-		return	$LOG(STS$K_ERROR, "Cannot start network listener thread, pthread_create()->%d, errno=%d", l_rc, errno);
+		return	$PUTMSG_FAO(T2R$__SYSERR, "pthread_create(listener)", l_rc, errno);
 
 
 

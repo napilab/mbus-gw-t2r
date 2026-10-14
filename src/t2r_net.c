@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-07"
-#define	__REV__		"00.07.00"
+#define	__IDENT__	"X.00-09"
+#define	__REV__		"00.09.00"
 
 /*
 **++
@@ -40,6 +40,10 @@
 **	25-AUG-2026	RRL	X.00-07 / REV: 00.07.00 - The client connect/disconnect events are
 **				signalled via $PUTMSG_FAO by the coded NETCONN/NETDISCN messages;
 **				the duplicating "Start session" line is removed (NETCONN covers it).
+**
+**	14-OCT-2026	RRL	X.00-09 / REV: 00.09.00 - The "peer close connection" is an ordinary end of
+**				a client session: it is logged as -I- instead of -W-; the routines still
+**				return STS$K_WARN, so the session is closed as before.
 **
 **--
 */
@@ -104,7 +108,7 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
 											/* Read a data from socket */
 	if ( !(l_rc = recv(a_session->sd, l_netbuf_dsc->data + l_netbuf_dsc->len, a_session->datalen, MSG_NOSIGNAL)) )
-		return	$LOG(STS$K_WARN, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno);
+		return	$LOG(STS$K_INFO, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno), STS$K_WARN;
 
 	if ( 0 > l_rc )									/* Check return status */
 		return	$LOG(STS$K_ERROR, "[#%d] --- error during read data, recv()->%d, errno: %d", a_session->sd, l_rc, errno);
@@ -147,7 +151,7 @@ T2R$_DESC	*l_netbuf_dsc = a_session->netbuf_dsc;
 
 											/* Read a data from socket */
 	if ( !(l_rc = send(a_session->sd, l_netbuf_dsc->data + a_session->datalen, l_netbuf_dsc->len - a_session->datalen, MSG_NOSIGNAL)) )
-		return	$LOG(STS$K_WARN, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno);
+		return	$LOG(STS$K_INFO, "[#%d] --- peer close connection, errno: %d", a_session->sd, errno), STS$K_WARN;
 
 	if ( 0 > l_rc )									/* Check return status */
 		return	$LOG(STS$K_ERROR, "[#%d] --- error during send data, send()->%d, errno: %d", a_session->sd, l_rc, errno);

@@ -45,7 +45,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-07'
+VERSION   = 'X.00-09'
 PUBDATE_EN = 'August 2026'
 PUBDATE_RU = 'Август 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -453,8 +453,8 @@ def s_pack_en ():
 		[H1('Chapter 2.  Before You Start'),
 		 P('Walk this checklist once --- it saves an hour of guessing later.'),
 		 P('<b>1.</b> The gateway is installed (see <i>README.md</i>). After the installation you have '
-		   'the program <font face="Mono">/usr/local/sbin/mbusgw-t2r</font> and the settings file '
-		   '<font face="Mono">/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf</font>.'),
+		   'the program <font face="Mono">/opt/mbusgw-t2r/sbin/mbusgw-t2r</font> and the settings file '
+		   '<font face="Mono">/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf</font>.'),
 		 P('<b>2.</b> You know which serial port the device is connected to. On Linux it is a file like '
 		   '<font face="Mono">/dev/ttyS0</font> or <font face="Mono">/dev/ttyUSB0</font>. If unsure, '
 		   'plug the USB adapter out and in, then run:'),
@@ -521,7 +521,7 @@ def s_pack_en ():
 		# --- Chapter 4 ---
 		[H1('Chapter 4.  Running the Gateway'),
 		 P('By hand, in a terminal (the messages go straight to the screen):'),
-		 C('$ /usr/local/sbin/mbusgw-t2r /settings=/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf'),
+		 C('$ /opt/mbusgw-t2r/sbin/mbusgw-t2r /settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf'),
 		 tbl(['Option', 'Meaning'], [
 			('/settings=&lt;file&gt;', 'The settings file (Chapter 3).'),
 			('/trace', 'The verbose tracing: every request and answer is dumped in hex. '
@@ -732,8 +732,8 @@ def s_pack_ru ():
 		[H1('Глава 2.  Перед началом'),
 		 P('Пройдите этот список один раз — он сэкономит час гаданий потом.'),
 		 P('<b>1.</b> Шлюз установлен (см. <i>README.md</i>). После установки у вас есть программа '
-		   '<font face="Mono">/usr/local/sbin/mbusgw-t2r</font> и файл настроек '
-		   '<font face="Mono">/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf</font>.'),
+		   '<font face="Mono">/opt/mbusgw-t2r/sbin/mbusgw-t2r</font> и файл настроек '
+		   '<font face="Mono">/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf</font>.'),
 		 P('<b>2.</b> Вы знаете, к какому последовательному порту подключено устройство. В Linux это '
 		   'файл вида <font face="Mono">/dev/ttyS0</font> или <font face="Mono">/dev/ttyUSB0</font>. '
 		   'Если не уверены — выдерните и вставьте USB-адаптер и выполните:'),
@@ -797,7 +797,7 @@ def s_pack_ru ():
 		   'разделять один target: шлюз выстроит их запросы в очередь.')],
 		[H1('Глава 4.  Запуск шлюза'),
 		 P('Вручную, в терминале (сообщения идут прямо на экран):'),
-		 C('$ /usr/local/sbin/mbusgw-t2r /settings=/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf'),
+		 C('$ /opt/mbusgw-t2r/sbin/mbusgw-t2r /settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf'),
 		 tbl(['Опция', 'Смысл'], [
 			('/settings=&lt;файл&gt;', 'Файл настроек (глава 3).'),
 			('/trace', 'Подробная трассировка: каждый запрос и ответ печатается в hex. '

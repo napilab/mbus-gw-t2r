@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-08ECO01"
-#define	__REV__		"00.08.01"
+#define	__IDENT__	"X.00-09"
+#define	__REV__		"00.09.00"
 
 /*
 **++
@@ -98,6 +98,11 @@
 **	25-AUG-2026	RRL	X.00-08ECO01 / REV: 00.08.01 - Use the StarLet library facilities where the
 **				code was doing the same by hand: $ISINRANGE() for the range validation,
 **				$ARRSZ() for the message catalogue size, $MIN() for the dump clipping.
+**
+**	14-OCT-2026	RRL	X.00-09 / REV: 00.09.00 - The delivery change (no C source change): the
+**				default installation prefix is /opt/mbusgw-t2r (sbin/, etc/,
+**				share/doc/mbusgw-t2r/); the docs and the User Guides follow the new layout.
+**				The "peer close connection" is logged as -I- (see T2R-NET).
 **
 **--
 */

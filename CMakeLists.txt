@@ -37,6 +37,13 @@
 #				the configuration examples - to etc/mbusgw-t2r/ (the existing files
 #				are never overwritten), the docs - to share/doc/mbusgw-t2r/.
 #
+#	14-OCT-2026	RRL	X.00-09: The default installation prefix is /opt/mbusgw-t2r (a
+#				self-contained tree: sbin/, etc/, share/doc/mbusgw-t2r/); an explicit
+#				-DCMAKE_INSTALL_PREFIX=... still works as before. Under /opt/ the
+#				configuration goes to <prefix>/etc/ - not to the GNUInstallDirs'
+#				/etc/opt/<prefix>/. Fixed the doubled DESTDIR in the configuration
+#				files path (file (INSTALL) prepends DESTDIR by itself).
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
@@ -54,6 +61,15 @@ include(CheckSymbolExists)
 
 
 project(mbusgw-t2r C)
+
+#
+#   The default installation prefix is /opt/mbusgw-t2r; must precede GNUInstallDirs, which
+#   derives the installation directories from it. An explicit -DCMAKE_INSTALL_PREFIX wins.
+#
+if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+	set (CMAKE_INSTALL_PREFIX "/opt/${PROJECT_NAME}" CACHE PATH "Installation prefix" FORCE)
+endif ()
+
 include(GNUInstallDirs)							# Must follow project(): needs the compiler info
 set ( CMAKE_VERBOSE_MAKEFILE ON )
 set ( CMAKE_COLOR_MAKEFILE   ON )
@@ -135,8 +151,15 @@ target_link_libraries( ${T2R_TARGET} StarLet::starlet pthread rt ${LIBCONFIG_LIB
 #------------------------------------------------------------------------------------------------------
 #	Installation:	sbin/mbusgw-t2r
 #			etc/mbusgw-t2r/*.conf	- the existing configuration files are never overwritten
+#						  (etc/*.conf under /opt/: the tree is self-contained)
 #			share/doc/mbusgw-t2r/	- README, BLOCKNOTE, the reference copies of the configs
 #
+if (CMAKE_INSTALL_PREFIX MATCHES "^/opt/")
+	set (T2R_CONFDIR "${CMAKE_INSTALL_PREFIX}/etc")
+else ()
+	set (T2R_CONFDIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/mbusgw-t2r")
+endif ()
+
 install (TARGETS ${T2R_TARGET}
 	RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
 )
@@ -157,12 +180,12 @@ install (FILES
 #	The configuration files are put to etc/ only when they are absent: an update must not
 #	destroy the has been tuned working configuration.
 install (CODE "
-	file (MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_SYSCONFDIR}/mbusgw-t2r\")
+	file (MAKE_DIRECTORY \"\$ENV{DESTDIR}${T2R_CONFDIR}\")
 	foreach (l_conf modbus-t2r.conf modbus-t2r_settings.conf)
-		set (l_dst \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_SYSCONFDIR}/mbusgw-t2r/\${l_conf}\")
+		set (l_dst \"\$ENV{DESTDIR}${T2R_CONFDIR}/\${l_conf}\")
 		if (NOT EXISTS \"\${l_dst}\")
 			file (INSTALL \"${CMAKE_CURRENT_SOURCE_DIR}/\${l_conf}\"
-				DESTINATION \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_SYSCONFDIR}/mbusgw-t2r\")
+				DESTINATION \"${T2R_CONFDIR}\")	# file (INSTALL) adds DESTDIR itself
 		else ()
 			message (STATUS \"Keeping the existing \${l_dst}\")
 		endif ()

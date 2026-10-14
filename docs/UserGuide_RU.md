@@ -27,8 +27,8 @@
 ## 2. Перед началом --- контрольный список
 
 1. Шлюз установлен (см. `README.md`, раздел *Installation*). После установки у вас есть:
-   - сама программа: `/usr/local/sbin/mbusgw-t2r`
-   - файл настроек: `/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf`
+   - сама программа: `/opt/mbusgw-t2r/sbin/mbusgw-t2r`
+   - файл настроек: `/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf`
 2. Вы знаете, **к какому последовательному порту** подключено устройство. В Linux это файл
    вида `/dev/ttyS0`, `/dev/ttyUSB0` или `/dev/ttyXRUSB0`. Если не уверены --- выдерните и
    вставьте USB-адаптер и выполните `dmesg | tail`: имя порта будет в выводе.
@@ -44,7 +44,7 @@
 его любым редактором:
 
 ```
-$ sudo nano /usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
+$ sudo nano /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
 ```
 
 Минимальный рабочий пример:
@@ -110,7 +110,7 @@ TCP-клиентов на всех сетевых интерфейсах, пор
 Вручную, в терминале (сообщения идут прямо на экран):
 
 ```
-$ /usr/local/sbin/mbusgw-t2r /settings=/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
+$ /opt/mbusgw-t2r/sbin/mbusgw-t2r /settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
 ```
 
 Полезные опции:

@@ -179,19 +179,25 @@ $ sudo make install
 
 | Что | Куда |
 |-----|------|
-| Бинарник `mbusgw-t2r` | `/usr/local/sbin/` |
-| Файлы конфигурации | `/usr/local/etc/mbusgw-t2r/` |
-| Документация и эталонные копии конфигов | `/usr/local/share/doc/mbusgw-t2r/` |
+| Бинарник `mbusgw-t2r` | `/opt/mbusgw-t2r/sbin/` |
+| Файлы конфигурации | `/opt/mbusgw-t2r/etc/` |
+| Документация и эталонные копии конфигов | `/opt/mbusgw-t2r/share/doc/mbusgw-t2r/` |
 
 Файлы конфигурации ставятся **только если их нет**: повторный `make install` (обновление)
 никогда не затирает настроенную рабочую конфигурацию — такие файлы отмечаются в выводе как
 `Keeping the existing ...`.
 
+Префикс по умолчанию — `/opt/mbusgw-t2r`: самодостаточное дерево, которое удаляется целиком.
+Чтобы поставить в другое место, задайте префикс на шаге 3:
+`cmake ../ -DCMAKE_INSTALL_PREFIX=/usr/local ...` — тогда бинарник попадёт в `/usr/local/sbin/`,
+файлы конфигурации — в `/usr/local/etc/mbusgw-t2r/`, документация — в
+`/usr/local/share/doc/mbusgw-t2r/`.
+
 ####	Шаг 5. Настроить и запустить
 
 ```
-$ sudo vi /usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
-$ /usr/local/sbin/mbusgw-t2r /settings=/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
+$ sudo vi /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
+$ /opt/mbusgw-t2r/sbin/mbusgw-t2r /settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
 ```
 
 Формат файла настроек — в разделе *Правила запуска и настройки* ниже.
@@ -203,7 +209,7 @@ $ cd mbus-gw-t2r/build
 $ sudo make uninstall
 ```
 
-Удаляется всё, что поставил `make install`, кроме файлов конфигурации в `etc/mbusgw-t2r/` —
+Удаляется всё, что поставил `make install`, кроме файлов конфигурации в `/opt/mbusgw-t2r/etc/` —
 настроенная рабочая конфигурация переживает деинсталляцию всегда.
 
 ###	Руководство пользователя
@@ -216,7 +222,7 @@ $ sudo make uninstall
 
 PDF собираются скриптом `docs/make_userguide_pdf.py` (набор reportlab, шрифты DejaVu).
 
-После `make install` оба лежат также в `/usr/local/share/doc/mbusgw-t2r/`.
+После `make install` оба лежат также в `/opt/mbusgw-t2r/share/doc/mbusgw-t2r/`.
 
 ###	Правила запуска и настройки
 

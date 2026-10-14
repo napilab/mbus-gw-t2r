@@ -28,8 +28,8 @@ The gateway sits between them and translates:
 
 1. The gateway is installed (see `README.md`, section *Installation*). After the installation
    you have:
-   - the program itself: `/usr/local/sbin/mbusgw-t2r`
-   - the settings file: `/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf`
+   - the program itself: `/opt/mbusgw-t2r/sbin/mbusgw-t2r`
+   - the settings file: `/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf`
 2. You know **which serial port** your device is connected to. On Linux it is a file like
    `/dev/ttyS0`, `/dev/ttyUSB0` or `/dev/ttyXRUSB0`. If unsure, plug the USB adapter out and
    in and run `dmesg | tail` --- the port name will be printed.
@@ -45,7 +45,7 @@ The settings file has two sections: `serials` (the serial lines) and `listeners`
 ports). Open it in any editor:
 
 ```
-$ sudo nano /usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
+$ sudo nano /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
 ```
 
 A minimal working example:
@@ -111,7 +111,7 @@ Notes for the very beginning:
 By hand, in a terminal (the messages go straight to the screen):
 
 ```
-$ /usr/local/sbin/mbusgw-t2r /settings=/usr/local/etc/mbusgw-t2r/modbus-t2r_settings.conf
+$ /opt/mbusgw-t2r/sbin/mbusgw-t2r /settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
 ```
 
 Useful options:

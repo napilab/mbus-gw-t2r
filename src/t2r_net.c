@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-12ECO01"
-#define	__REV__		"00.12.01"
+#define	__IDENT__	"X.00-12ECO02"
+#define	__REV__		"00.12.02"
 
 /*
 **++
@@ -58,6 +58,11 @@
 **				(s_net_mbap_tx() had a copy of the s_net_mbap_rx() header, s_net_session()
 **				documented a wrong parameter); LSNRABRT shows the socket before it is closed
 **				(was always #-1).
+**
+**	14-OCT-2026	RRL	X.00-12ECO02 / REV: 00.12.02 - SO_REUSEPORT is not set on the listening sockets: a second
+**				instance of the gateway was bound to the same ports silently and the kernel
+**				split the clients between both processes; now its bind() fails (LSNRERR,
+**				errno 98). SO_REUSEADDR is kept for a quick restart.
 **--
 */
 
@@ -673,9 +678,6 @@ pthread_t	l_tid;
 
 		if( 0 > setsockopt(l_sd, SOL_SOCKET, SO_REUSEADDR, (char *)&l_one, sizeof(l_one))  )
 			$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(SO_REUSEADDR)", -1, errno);
-
-		if( 0 > setsockopt(l_sd, SOL_SOCKET, SO_REUSEPORT, (char *)&l_one, sizeof(l_one))  )
-			$PUTMSG_FAO(T2R$__NETSYSWRN, l_sd, "setsockopt(SO_REUSEPORT)", -1, errno);
 
 		if ( 0 > bind(l_sd, (struct sockaddr*) &l_listener->sk, l_slen) )
 			{

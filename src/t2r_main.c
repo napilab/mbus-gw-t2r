@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-12ECO01"
-#define	__REV__		"00.12.01"
+#define	__IDENT__	"X.00-12ECO02"
+#define	__REV__		"00.12.02"
 
 /*
 **++
@@ -126,6 +126,9 @@
 **	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code;
 **				main() returns EXIT_FAILURE on a command line/settings error (was the
 **				condition code - an arbitrary exit status); USAGE and help[] name /SETTINGS.
+**
+**	14-OCT-2026	RRL	X.00-12ECO02 / REV: 00.12.02 - SO_REUSEPORT is dropped (see T2R-NET): a second instance
+**				on the same ports gets LSNRERR, errno 98.
 **--
 */
 

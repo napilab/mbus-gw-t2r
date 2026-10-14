@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-12ECO02"
-#define	__REV__		"00.12.02"
+#define	__IDENT__	"X.00-12ECO03"
+#define	__REV__		"00.12.03"
 
 /*
 **++
@@ -129,6 +129,9 @@
 **
 **	14-OCT-2026	RRL	X.00-12ECO02 / REV: 00.12.02 - SO_REUSEPORT is dropped (see T2R-NET): a second instance
 **				on the same ports gets LSNRERR, errno 98.
+**
+**	14-OCT-2026	RRL	X.00-12ECO03 / REV: 00.12.03 - The delivery change (no C source change): the
+**				both READMEs describe the <listeners> keys, <connlm> and <idletmo> included.
 **--
 */
 

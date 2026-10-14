@@ -257,7 +257,28 @@ After `make install` both are also in `/opt/mbusgw-t2r/share/doc/mbusgw-t2r/`.
 
 
 ##### Settings options
-Check an example of settings file for reference of parameters and rules of configurations
+Check an example of settings file for reference of parameters and rules of configurations, or
+the User Guide (chapter 3) --- every key is described there with its allowed range.
+
+The `listeners` section --- one record per TCP port:
+
+| Key | Required | Meaning | Values |
+|-----|----------|---------|--------|
+| `bind` | yes | The protocol, the address and the port to listen on | `"TCP:0.0.0.0:502"` (UDP is not supported) |
+| `target` | yes | The serial device (from the `serials` section) to forward the requests to | `"/dev/ttyUSB0"` |
+| `connlm` | no | How many TCP clients may be connected to this port **at the same time**; one more is disconnected at once (`%T2R-W-CONNLIMIT`) | 1..512, default 32 |
+| `idletmo` | no | A client which sends nothing for this many **seconds** is disconnected (`%T2R-W-IDLETMO`); a client which polls rarely just reconnects | 1..86400, default 60 |
+| `iotmo` | no | Reserved, not used yet | |
+
+An out of range `connlm`/`idletmo` rejects the whole listener record (`%T2R-E-LSNOPTRNG`).
+Every simultaneous client takes one thread: with many clients mind the `TasksMax` limit of the
+systemd unit (see *Troubleshooting*, `SESSFAIL`, in the User Guide).
+
+```
+listeners = (
+	{bind = "TCP:0.0.0.0:502"; target = "/dev/ttyUSB0"; connlm = 16; idletmo = 60;}
+);
+```
 
 ## Authors and acknowledgment
 Developer: Ruslan (AKA : The BadAss SysMan) Laishev

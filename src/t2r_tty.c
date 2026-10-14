@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-TTY"
-#define	__IDENT__	"X.00-12ECO01"
-#define	__REV__		"00.12.01"
+#define	__IDENT__	"X.00-13ECO01"
+#define	__REV__		"00.13.01"
 
 /*
 **++
@@ -57,6 +57,14 @@
 **	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The routine headers are brought in line with the code
 **				(t2r$tty_close() had a copy of the t2r$tty_open() header, s_tty_flush() is a
 **				fixed t3.5 window, the RETURNS sections name the real status codes).
+**
+**	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - The device lock could be held forever: tcdrain()
+**				has no time limit, an USB-to-serial adapter which stopped shifting out the
+**				data hung the session thread in it with the lock taken - every other client
+**				of the line got DEVLOCKERR/DEVBUSY until the restart, the shutdown failed by
+**				DEVCLSERR. s_tty_tx_drain() replaces tcdrain(): TIOCOUTQ is polled up to the
+**				frame air time plus the answer timeout (TXDRAINTMO, the output is flushed);
+**				s_tty_open(): CRTSCTS is cleared explicitly (was inherited from the port).
 **--
 */
 #include	<time.h>
@@ -159,11 +167,85 @@ int	l_rc;
 
 
 /*
+ *   DESCRIPTION: Wait until the has been written frame has left the UART - a bounded replacement
+ *	of tcdrain(). tcdrain() has no time limit: an USB-to-serial adapter which stops shifting out
+ *	the data (an USB hiccup, a lost CTS) blocks the caller forever, and the caller holds the
+ *	device lock - the whole line is dead until the restart. Here:
+ *	1. The kernel output queue (TIOCOUTQ) is polled by 1 msec steps until it is empty.
+ *	2. The rest of the frame air time (the octets in the adapter's own FIFO) is waited out:
+ *	   the frame cannot leave earlier than a_len * (start + data + parity + stop bits) / baud
+ *	   after the writev().
+ *	The step 1 is limited by the air time plus the answer timeout; on the timeout the output
+ *	queue is discarded (tcflush(TCOFLUSH)) and TXDRAINTMO is signalled. A failed TIOCOUTQ is
+ *	signalled by TTYSYSWRN, then the air time only is waited out.
+ *
+ *   INPUTS:
+ *	a_serial:	A context of the serial line: .fd, .baud, .databits, .parity, .stopbits, .anstmo_msec
+ *	a_len:		A length of the has been written frame in octets
+ *	a_start_ts:	CLOCK_MONOTONIC time just before the writev()
+ *
+ *   OUTPUTS:
+ *	NONE
+ *
+ *   RETURNS:
+ *	STS$K_SUCCESS, T2R$__TXDRAINTMO
+ */
+static int	s_tty_tx_drain (
+	const T2R$_SERIAL	*a_serial,
+			int	a_len,
+	const struct timespec	*a_start_ts
+			)
+{
+int	l_rc, l_outq, l_bits;
+int64_t	l_air_usec;
+struct timespec	l_now_ts, l_end_ts, l_deadline_ts, l_tmo_ts, l_step_ts = {.tv_nsec = 1000000L};
+
+	l_bits = 1 + a_serial->databits + (a_serial->parity != 'N') + a_serial->stopbits;	/* Bits per character */
+	l_air_usec = ((int64_t) a_len * l_bits * 1000000LL) / a_serial->baud;
+
+	l_tmo_ts.tv_sec = l_air_usec / 1000000LL;
+	l_tmo_ts.tv_nsec = (l_air_usec % 1000000LL) * 1000L;
+	__util$add_time (a_start_ts, &l_tmo_ts, &l_end_ts);				/* The last bit leaves the wire */
+
+	l_tmo_ts.tv_sec = a_serial->anstmo_msec / 1000;
+	l_tmo_ts.tv_nsec = (a_serial->anstmo_msec % 1000) * 1000000L;
+	__util$add_time (&l_end_ts, &l_tmo_ts, &l_deadline_ts);
+
+	for ( l_outq = 1; l_outq; nanosleep(&l_step_ts, NULL) )
+		{
+		if ( 0 > (l_rc = ioctl(a_serial->fd, TIOCOUTQ, &l_outq)) )
+			{
+			$PUTMSG_FAO(T2R$__TTYSYSWRN, a_serial->fd, a_serial->devname, "ioctl(TIOCOUTQ)", l_rc, errno);
+			break;
+			}
+
+		if ( !l_outq )
+			break;
+
+		clock_gettime(CLOCK_MONOTONIC, &l_now_ts);
+
+		if ( 0 < __util$cmp_time (&l_now_ts, &l_deadline_ts) )
+			{
+			tcflush(a_serial->fd, TCOFLUSH);
+
+			return	$PUTMSG_FAO(T2R$__TXDRAINTMO, a_serial->fd, a_serial->devname,
+					(unsigned) (l_air_usec / 1000) + a_serial->anstmo_msec, l_outq);
+			}
+		}
+
+	/* The kernel queue is empty: wait out the rest of the air time */
+	while ( EINTR == clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &l_end_ts, NULL) );
+
+	return	STS$K_SUCCESS;
+}
+
+
+/*
  *   DESCRIPTION: Send a request PDU over the serial line:
  *	- an empty PDU is skipped (TXNODATA is signalled, success is returned)
  *	- compute CRC16 (the low octet goes first on the wire)
  *	- flush a stale input (tcflush(TCIFLUSH))
- *	- wait the inter-PDU interval (t3.5), writev() PDU + CRC16, tcdrain()
+ *	- wait the inter-PDU interval (t3.5), writev() PDU + CRC16, s_tty_tx_drain()
  *	- wait the inter-PDU interval (t3.5) again
  *
  *   INPUTS:
@@ -174,7 +256,7 @@ int	l_rc;
  *	NONE
  *
  *   RETURNS:
- *	STS$K_SUCCESS, T2R$__XMITERR, T2R$__XMITSHORT, T2R$__TTYSYSERR (tcdrain() failed)
+ *	STS$K_SUCCESS, T2R$__XMITERR, T2R$__XMITSHORT, T2R$__TXDRAINTMO
  */
 static int	s_tty_rtu_tx (
 	const T2R$_SERIAL	*a_serial,
@@ -186,7 +268,7 @@ uint16_t l_crc;
 uint8_t	l_crcbuf[2];
 enum {	IOV$K_PDU, IOV$K_CRC, IOV$K_MAX};
 struct iovec	l_iov[IOV$K_MAX];
-struct timespec l_inter_pdu_ts;
+struct timespec l_inter_pdu_ts, l_start_ts;
 
 
 	if ( !a_req_pdu->len )
@@ -219,19 +301,18 @@ struct timespec l_inter_pdu_ts;
 	for ( l_inter_pdu_ts = a_serial->inter_pdu_ts; nanosleep(&l_inter_pdu_ts,  &l_inter_pdu_ts); );
 
 
+	clock_gettime(CLOCK_MONOTONIC, &l_start_ts);					/* The air time is counted from here */
+
 	if ( 0 > (l_rc = writev(a_serial->fd, l_iov,  IOV$K_MAX)) )
 		l_rc = $PUTMSG_FAO(T2R$__XMITERR, a_serial->fd, a_serial->devname, l_len, l_rc, errno);
 	else if ( l_rc != l_len )
 		l_rc = $PUTMSG_FAO(T2R$__XMITSHORT, a_serial->fd, a_serial->devname, l_rc, l_len, errno);
 	else	{
 		/*
-		 * Wait until the UART has really shifted out the last octet. On a half duplex RS-485
-		 * line without a hardware direction control we would otherwise switch to the receiving
-		 * before the frame has been transmitted and would read our own request back.
+		 * Wait until the UART has really shifted out the last octet: the post-delay and the
+		 * answer timeout are counted from the end of the request on the wire.
 		 */
-		if ( 0 > (l_rc = tcdrain(a_serial->fd)) )
-			l_rc = $PUTMSG_FAO(T2R$__TTYSYSERR, a_serial->fd, a_serial->devname, "tcdrain()", l_rc, errno);
-		else	l_rc = STS$K_SUCCESS;
+		l_rc = s_tty_tx_drain (a_serial, l_len, &l_start_ts);
 		}
 
 
@@ -804,6 +885,9 @@ int	l_flags = 0, l_rc;
 
 	/* Raw input */
 	a_serial->tios.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+
+	/* Hardware flow control is disabled: with an inherited CRTSCTS and CTS low nothing goes out */
+	a_serial->tios.c_cflag &= ~CRTSCTS;
 
 	/* Software flow control is disabled */
 	a_serial->tios.c_iflag &= ~(IXON | IXOFF | IXANY);

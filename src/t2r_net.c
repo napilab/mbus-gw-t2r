@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-NET"
-#define	__IDENT__	"X.00-12ECO02"
-#define	__REV__		"00.12.02"
+#define	__IDENT__	"X.00-13ECO01"
+#define	__REV__		"00.13.01"
 
 /*
 **++
@@ -63,6 +63,9 @@
 **				instance of the gateway was bound to the same ports silently and the kernel
 **				split the clients between both processes; now its bind() fails (LSNRERR,
 **				errno 98). SO_REUSEADDR is kept for a quick restart.
+**
+**	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - t2r$net_stop_listeners(): DEVCLSERR was signalled
+**				twice - t2r$tty_close() signals it itself.
 **--
 */
 
@@ -601,8 +604,6 @@ pthread_t	l_tid;
  */
 int t2r$net_stop_listeners (void)
 {
-int	l_rc;
-
 	for (int i = 0; i < g_listeners_nr; i++ )
 		{
 		if ( 0 > s_pfd_lsnr[i].fd )						/* This one has not been started */
@@ -623,8 +624,7 @@ int	l_rc;
 		if ( g_serials[i].state == T2R$K_STATE_IDLE )
 			continue;
 
-		if ( !(1 & (l_rc = t2r$tty_close (&g_serials[i]))) )
-			$PUTMSG_FAO(T2R$__DEVCLSERR, g_serials[i].fd, g_serials[i].devname);
+		t2r$tty_close (&g_serials[i]);						/* A failure is signalled inside */
 		}
 
 	return	STS$K_SUCCESS;

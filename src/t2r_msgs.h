@@ -32,6 +32,9 @@
 **	14-OCT-2026	RRL	X.00-12ECO01 / REV: 00.12.01 - The English of the message texts is fixed: have been,
 **				ill-formed, representation, Accepted/Closed client connection, peer has
 **				closed the connection, for the past, the connection is rejected.
+**
+**	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - Added TXDRAINTMO: the transmission of a request
+**				has not been completed in time (the bounded replacement of tcdrain()).
 **--
 */
 
@@ -137,6 +140,7 @@ $DEF_MSG(T2R, WARN,	DEVNOTINI,		"Device <!AZ> has not been initialized") \
 $DEF_MSG(T2R, ERROR,	DEVBUSY,			"[#!SL:<!AZ>] --- cannot be allocated for exclusive I/O") \
 $DEF_MSG(T2R, WARN,	CONNLIMIT,		"[#!SL] !%I:!UW --- the listener has reached its connection limit (!UL) --- the connection is rejected") \
 $DEF_MSG(T2R, ERROR,	LSNOPTRNG,		"[listener #!2ZL] --- !AZ !SL is out of range [!SL..!SL]") \
+$DEF_MSG(T2R, ERROR,	TXDRAINTMO,		"[#!SL:<!AZ>] --- the request has not been transmitted in !UL msec, !SL octets are dropped") \
 
 
 

@@ -203,6 +203,8 @@ dislikes.**
 | `%T2R-W-EXCRPT, [...] Report exception 4 (SERVER_DEVICE_FAILURE) ...` | The gateway told the TCP client "the serial side failed" | look at the *previous* log line --- it names the real reason (NOANSWER, CRC16ERR, ...) |
 | `%T2R-W-CONNLIMIT, [...] --- the listener has reached its connection limit (N) --- the connection is rejected` | The port already has `connlm` clients connected | if they are all real clients, raise `connlm` of this listener; otherwise find who keeps the connections open: `ss -tn` |
 | `%T2R-W-IDLETMO, [...] No activity for the past N seconds (idletmo) --- close the connection` | A client has sent nothing for `idletmo` seconds | normal for a client which polls rarely --- it reconnects; to keep the connection, raise `idletmo` of this listener |
+| `%T2R-E-TXDRAINTMO, [...] --- the request has not been transmitted in N msec` | The USB adapter took the request but did not send it out; the request gets exception 4 | the adapter or its USB link hangs: `dmesg \| tail`; replug the adapter or reboot the board. Since X.00-13ECO01 the line is not blocked by it: the next request tries again |
+| `%T2R-E-DEVLOCKERR` / `DEVBUSY` on every request of one port, the other ports are fine | Another request holds the line and does not end | update to X.00-13ECO01 or newer (an older gateway can hang forever in the serial driver). Before the restart, save what the stuck thread does: `for t in /proc/$(pidof mbusgw-t2r)/task/*; do echo $t $(cat $t/wchan); done` |
 | `%T2R-E-SESSFAIL, [...] --- cannot start a session thread, pthread_create()->11` | Too many TCP clients at once: every client takes a thread, and systemd limits the service (`TasksMax`, 578 on a small board) | find who keeps so many connections open (`ss -tn`); if they are all real, raise the limit: `TasksMax=2048` in the `[Service]` section of the unit, then `systemctl daemon-reload` |
 | `%T2R-E-LSNRERR, Listener 0.0.0.0:502 --- bind() error, errno: 98` | errno 98 = the TCP port is already taken | another gateway instance is running, or another program owns the port: `sudo ss -tlnp \| grep 502` |
 | the same, `errno: 13` | Ports below 1024 need root | run with `sudo`, or use a port >= 1024 (e.g. 5502) |
@@ -240,7 +242,7 @@ dislikes.**
 | `BADPROTO` | E | A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed |
 | `PDUSHORT` | E | A TCP request is too short to be a MODBUS request; the connection is closed |
 | `PDULONG` | E | A TCP request is longer than 256 octets; the connection is closed |
-| `IDLETMO` | W | A TCP client has been silent for `idletmo` seconds (60 by default); the connection is closed |
+| `IDLETMO` | W | A TCP client has been silent for 20 minutes; the connection is closed |
 | `NETRDTMO` | E | A TCP client started a request but did not finish it in time; the connection is closed |
 | `REQFAIL` | W | A request is answered with a MODBUS exception; the previous lines say why |
 | `NETPOLLEV` | E | A TCP connection broke (poll() reports an error); the connection is closed |
@@ -291,8 +293,72 @@ dislikes.**
 | `DEVCLSERR` | E | The serial port cannot be closed |
 | `DEVNOTINI` | W | Closing a serial port which was never opened --- harmless |
 | `DEVBUSY` | E | The serial line cannot be taken for a request; the request gets exception 4 |
+| `SYSERR` | E | A system call failed; its name, the return value and errno are shown. Quote the line when asking for help |
+| `NETSYSERR` | E | A system call on a TCP connection failed (recv, send, poll, accept); the connection is closed |
+| `NETSYSWRN` | W | A socket option cannot be set; the gateway keeps working |
+| `TTYSYSERR` | E | A system call on the serial port failed (poll, read); the request gets exception 4 |
+| `TTYSYSWRN` | W | A minor serial port call failed (tcflush, poll/read while flushing); the gateway keeps working |
+| `DEVSYSERR` | E | A serial port setup call failed (tcgetattr, tcsetattr, cfsetspeed, mutex); the port is not used |
+| `DEVSYSWRN` | W | Waiting for the serial line took too long (pthread_mutex_timedlock); the gateway tries again |
+| `PEERCLOSE` | I | The TCP client has closed the connection --- the normal end of a session |
+| `ALLSENT` | W | Nothing left to send on a TCP connection --- harmless |
+| `BADPROTO` | E | A TCP request has a non-zero MBAP protocol id: the client does not speak MODBUS TCP; the connection is closed |
+| `PDUSHORT` | E | A TCP request is too short to be a MODBUS request; the connection is closed |
+| `PDULONG` | E | A TCP request is longer than 256 octets; the connection is closed |
+| `IDLETMO` | W | A TCP client has been silent for `idletmo` seconds (60 by default); the connection is closed |
+| `NETRDTMO` | E | A TCP client started a request but did not finish it in time; the connection is closed |
+| `REQFAIL` | W | A request is answered with a MODBUS exception; the previous lines say why |
+| `NETPOLLEV` | E | A TCP connection broke (poll() reports an error); the connection is closed |
+| `SESSFAIL` | E | No thread for a new TCP client: too many connections at once (see Troubleshooting); the client is dropped |
+| `LSNRABRT` | W | A TCP listener is stopped --- normal at the gateway exit |
+| `TGTOPNERR` | E | A TCP port is not opened because its serial port cannot be opened; the previous line says why |
+| `NOLSNRUP` | E | Not a single TCP port could be opened; the gateway stops |
+| `NOROOM` | E | An answer does not fit into the buffer --- an internal error, please report it |
+| `MBAPLEN` | E | The MBAP length field does not match the received data; the request is rejected |
+| `REQSHORT` | E | A request is too short to be forwarded to the serial line |
+| `TGTNDEF` | E | A listener names a target which is not in the serials section |
+| `CFGNOSECT` | E | The settings file has no serials or listeners section; the gateway stops |
+| `CFGTRUNC` | W | Too many records in a section; only the first ones are used |
+| `SERBADREC` | E | A serials record is broken or has no device; it is skipped |
+| `SERBADOPT` | E | A serials record has no chars, or it is too long; the record is skipped |
+| `SERNORS485` | W | rs485 = 1 is set, but this build has no RS485 support; the option is ignored |
+| `SERBADCHR` | E | The chars value cannot be read; write it like "9600, 8, N, 1" |
+| `SERRANGE` | E | The speed, data bits or stop bits are out of range; the allowed range is in the message |
+| `SERBADPAR` | E | The parity letter is unknown; use N, E or O |
+| `DEVADDED` | I | A serials record is accepted; the line parameters are shown |
+| `TSENABLED` | I | The Time Stamp pseudo device is on for this port |
+| `TSDISABLED` | I | The Time Stamp pseudo device is off for this port (the default) |
+| `NOSERIALS` | E | Not a single serials record survived the validation; the gateway stops |
+| `LSNBADREC` | E | A listeners record is broken (no bind, no target, UDP); it is skipped |
+| `LSNBADBIND` | E | The bind value cannot be read; write it like "TCP:0.0.0.0:502" |
+| `LSNRANGE` | E | The TCP port number is out of range [1..65535] |
+| `LSNBADADDR` | E | The IP address in bind is not a valid IPv4 address |
+| `LSNNOTGT` | E | The target of a listener is not in the serials section; the record is skipped |
+| `LSNADDED` | I | A listeners record is accepted; the address, the port and the target are shown |
+| `NOLSNRS` | E | Not a single listeners record survived the validation; the gateway stops |
+| `CFGPARSE` | E | The settings file cannot be read or has a syntax error; the file name and the line are shown |
+| `SIGERR` | E | A signal handler cannot be set --- an internal error, please report it |
+| `CFGERR` | E | The configuration cannot be processed; the previous lines say why |
+| `CFGABORT` | F | The gateway stops because of the configuration errors above |
+| `DEVLOCKERR` | E | The serial line stayed busy for 39 seconds (another request holds it); the request gets exception 4 |
+| `TXNODATA` | W | An empty request was not sent --- harmless |
+| `XMITERR` | E | The request cannot be written to the serial port; the request gets exception 4 |
+| `XMITSHORT` | E | Only a part of the request has been written to the serial port |
+| `RXBUFFULL` | W | The device sent more than 256 octets; the rest is dropped |
+| `RXNODATA` | E | The answer started but no octet was collected |
+| `RESPMISM` | W | The answer came from another slave or for another function: two masters or two devices with one address |
+| `BADSPEED` | W | The speed is not a standard one; 9600 is used |
+| `NOTTTY` | W | The device is not a serial port |
+| `RS485OFF` | W | The RS485 mode cannot be switched on for this port; the port works without it |
+| `RS485ON` | S | The RS485 mode is on for this port |
+| `DEVINIERR` | E | The serial port cannot be set up; the previous line says why |
+| `DEVINIT` | I | The serial port is set up |
+| `DEVCLSERR` | E | The serial port cannot be closed |
+| `DEVNOTINI` | W | Closing a serial port which was never opened --- harmless |
+| `DEVBUSY` | E | The serial line cannot be taken for a request; the request gets exception 4 |
 | `CONNLIMIT` | W | A new TCP client is disconnected at once: the port already has `connlm` clients |
 | `LSNOPTRNG` | E | A listeners option (`connlm`, `idletmo`) is out of range; the record is skipped |
+| `TXDRAINTMO` | E | The request was not sent out by the serial adapter in time; it is dropped, the request gets exception 4 |
 
 *(The `S/I/W/E` letter is a part of the printed line: `%T2R-E-CRC16ERR, ...`.)*
 

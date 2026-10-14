@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13"
-#define	__REV__		"00.13.00"
+#define	__IDENT__	"X.00-13ECO01"
+#define	__REV__		"00.13.01"
 
 /*
 **++
@@ -136,6 +136,10 @@
 **	14-OCT-2026	RRL	X.00-13 / REV: 00.13.00 - The release of the X.00-09..X.00-12ECO03 changes: the
 **				/opt layout, the FTDI framing, the FAO-only logging, <connlm>/<idletmo>,
 **				no SO_REUSEPORT; the package version is 0.13.0.
+**
+**	14-OCT-2026	RRL	X.00-13ECO01 / REV: 00.13.01 - T2R-TTY: the device lock cannot be held forever
+**				anymore (tcdrain() is replaced by the bounded s_tty_tx_drain(), TXDRAINTMO),
+**				CRTSCTS is cleared at the open; T2R-NET: no double DEVCLSERR.
 **--
 */
 

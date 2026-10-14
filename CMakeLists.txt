@@ -47,6 +47,9 @@
 #	14-OCT-2026	RRL	X.00-10: contrib/99-ftdi-latency.rules (the FTDI latency_timer = 1 msec udev
 #				rule) is installed with the docs.
 #
+#	14-OCT-2026	RRL	X.00-12ECO03: The package has a version: project(... VERSION) is taken from
+#				__REV__ of src/t2r_main.c (REV 00.12.03 -> VERSION 0.12.3).
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
@@ -63,7 +66,25 @@ include(CheckSymbolExists)
 
 
 
-project(mbusgw-t2r C)
+#
+#   The package version is taken from __REV__ of the head module (src/t2r_main.c): the IDENT/REV
+#   pair is the single source of the revision, X.00-12ECO03 -> REV 00.12.03 -> VERSION 0.12.3.
+#
+file (STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/src/t2r_main.c" T2R_REV_LINE REGEX "^#define[ \t]+__REV__[ \t]+\"[0-9.]+\"")
+string (REGEX REPLACE ".*\"([0-9]+)\.([0-9]+)\.([0-9]+)\".*" "\\1;\\2;\\3" T2R_REV_LIST "${T2R_REV_LINE}")
+list (LENGTH T2R_REV_LIST T2R_REV_N)
+if (NOT T2R_REV_N EQUAL 3)
+	message (FATAL_ERROR "Cannot get __REV__ from src/t2r_main.c: <${T2R_REV_LINE}>")
+endif ()
+list (GET T2R_REV_LIST 0 T2R_REV_MAJOR)
+list (GET T2R_REV_LIST 1 T2R_REV_MINOR)
+list (GET T2R_REV_LIST 2 T2R_REV_ECO)
+math (EXPR T2R_REV_MAJOR "${T2R_REV_MAJOR}")				# "00" -> "0"
+math (EXPR T2R_REV_MINOR "${T2R_REV_MINOR}")
+math (EXPR T2R_REV_ECO "${T2R_REV_ECO}")
+
+project(mbusgw-t2r VERSION ${T2R_REV_MAJOR}.${T2R_REV_MINOR}.${T2R_REV_ECO} LANGUAGES C)
+message (STATUS "mbusgw-t2r package version: ${PROJECT_VERSION}")
 
 #
 #   The default installation prefix is /opt/mbusgw-t2r; must precede GNUInstallDirs, which

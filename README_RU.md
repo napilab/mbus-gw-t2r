@@ -296,3 +296,6 @@ listeners = (
 StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 VAX/VMS bigot,
 BMF.
+
+## Лицензия
+MIT, см. [LICENSE](LICENSE).

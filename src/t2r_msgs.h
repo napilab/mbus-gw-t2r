@@ -9,6 +9,8 @@
 **
 **  AUTHORS: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 **
+**  SPDX-License-Identifier: MIT
+**
 **  MODIFICATION HISTORY:
 **
 **	25-AUG-2026	RRL	X.00-06 / REV: 00.06.00 - Added the FAO-styled messages block for the

@@ -13,6 +13,8 @@
 **
 **  AUTHORS: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 **
+**  SPDX-License-Identifier: MIT
+**
 **  CREATION DATE:  26-SEP-2025
 **
 **  MODIFICATION HISTORY:

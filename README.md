@@ -298,3 +298,6 @@ listeners = (
 Developer: Ruslan (AKA : The BadAss SysMan) Laishev
 VAX/VMS bigot,
 BMF.
+
+## License
+MIT, see [LICENSE](LICENSE).

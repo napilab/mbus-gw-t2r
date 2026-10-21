@@ -9,6 +9,8 @@
 **
 **  AUTHORS: Ruslan R. Laishev (RRL)
 **
+**  SPDX-License-Identifier: MIT
+**
 **  CREATION DATE:  26-NOV-2023
 **
 **  MODIFICATION HISTORY:

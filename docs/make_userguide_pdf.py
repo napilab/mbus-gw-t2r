@@ -26,6 +26,8 @@
 #
 #	14-OCT-2026	RRL	X.00-13ECO02: NETPOLLEV is a W; the message codes reference had 63 rows twice
 #				(the X.00-11 insertion script was run again) - removed.
+#
+#	21-OCT-2026	RRL	X.00-13ECO03: the Legal Notice names the license (Apache License 2.0).
 #--
 import sys
 
@@ -56,7 +58,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-13ECO02'
+VERSION   = 'X.00-13ECO03'
 PUBDATE_EN = 'October 2026'
 PUBDATE_RU = 'Октябрь 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -388,6 +390,8 @@ def s_pack_en ():
 	L['legal'] = [
 		'The information contained herein is subject to change without notice. '
 		'%s shall not be liable for technical or editorial errors or omissions contained herein.' % ORG,
+		'The software described in this manual is licensed under the Apache License, Version 2.0; '
+		'see the LICENSE and NOTICE files of the distribution.',
 		'The software described in this manual is distributed in the hope that it will be useful, '
 		'but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS '
 		'FOR A PARTICULAR PURPOSE.',
@@ -765,6 +769,8 @@ def s_pack_ru ():
 	L['legal'] = [
 		'Сведения в настоящем документе могут быть изменены без предварительного уведомления. '
 		'%s не несёт ответственности за технические или редакционные ошибки и пропуски в настоящем документе.' % ORG,
+		'Программа, описанная в настоящем руководстве, распространяется по лицензии Apache License, '
+		'Version 2.0; см. файлы LICENSE и NOTICE в составе дистрибутива.',
 		'Программа, описанная в настоящем руководстве, распространяется в надежде, что она будет полезной, '
 		'но БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ, в том числе без подразумеваемых гарантий товарной пригодности '
 		'и пригодности для конкретной цели.',

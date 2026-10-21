@@ -9,7 +9,7 @@
 **
 **  AUTHORS: Ruslan R. Laishev (RRL)
 **
-**  SPDX-License-Identifier: MIT
+**  SPDX-License-Identifier: Apache-2.0
 **
 **  CREATION DATE:  26-NOV-2023
 **

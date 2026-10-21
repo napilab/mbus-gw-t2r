@@ -298,4 +298,4 @@ VAX/VMS bigot,
 BMF.
 
 ## Лицензия
-MIT, см. [LICENSE](LICENSE).
+Apache License 2.0, см. [LICENSE](LICENSE) и [NOTICE](NOTICE).

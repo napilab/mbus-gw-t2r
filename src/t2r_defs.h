@@ -11,7 +11,7 @@
 **
 **  AUTHORS: StarLet Squad and Ruslan R. Laishev (AKA: BadAss sysman)
 **
-**  SPDX-License-Identifier: MIT
+**  SPDX-License-Identifier: Apache-2.0
 **
 **  CREATION DATE:  10-AUG-2025
 **

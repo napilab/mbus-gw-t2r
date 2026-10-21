@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13ECO02"
-#define	__REV__		"00.13.02"
+#define	__IDENT__	"X.00-13ECO03"
+#define	__REV__		"00.13.03"
 
 /*
 **++
@@ -145,6 +145,9 @@
 **
 **	14-OCT-2026	RRL	X.00-13ECO02 / REV: 00.13.02 - NETPOLLEV is signalled as a WARNING (a connection
 **				reset by the client).
+**
+**	21-OCT-2026	RRL	X.00-13ECO03 / REV: 00.13.03 - Apache License 2.0 (LICENSE, NOTICE, SPDX tags);
+**				no code changes.
 **--
 */
 

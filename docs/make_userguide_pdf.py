@@ -30,6 +30,8 @@
 #	21-OCT-2026	RRL	X.00-13ECO03: the Legal Notice names the license (Apache License 2.0).
 #
 #	28-OCT-2026	RRL	X.00-13ECO04: the version follows the release (libconfig is linked statically).
+#
+#	28-OCT-2026	RRL	X.00-13ECO05: the version follows the release (the .deb packages).
 #--
 import sys
 
@@ -60,7 +62,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-13ECO04'
+VERSION   = 'X.00-13ECO05'
 PUBDATE_EN = 'October 2026'
 PUBDATE_RU = 'Октябрь 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'

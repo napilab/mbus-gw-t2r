@@ -6,12 +6,19 @@
 #   CREATION DATE: 28-OCT-2026
 #
 #	A push of the tag v<VERSION> (VERSION follows __REV__ of src/t2r_main.c, X.00-13ECO05 ->
-#	v0.13.5) builds the packages and attaches them to the Release of that tag; the manual run
-#	(Actions -> release -> Run workflow) only builds and tests them, see the run's artifacts.
+#	v0.13.5) builds the packages and attaches them and the User Guide PDFs to the Release of that
+#	tag. The manual run (Actions -> release -> Run workflow) with the <tag> input does the same for
+#	an existing tag (the files of its Release are replaced); without it - only builds and tests
+#	the packages of the branch, see the run's artifacts.
 #
 #	The packages are built on Debian 12 (bookworm): the binary needs glibc >= 2.34 only (bookworm,
 #	trixie, Ubuntu 22.04 and newer); libconfig and StarLet are linked statically.
 #	Every package is installed and started on bookworm, trixie and noble before the release.
+#
+#	MODIFICATION HISTORY:
+#
+#	28-OCT-2026	RRL	The User Guide PDFs are attached to the Release too (named as before:
+#				mbusgw-t2r-<IDENT>-UserGuide_EN.pdf); the manual run takes a <tag>.
 #--
 
 name: release
@@ -20,6 +27,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing tag (v0.13.5) to build and release; empty - build only"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -45,6 +57,8 @@ jobs:
             libconfig-dev dpkg-dev file git ca-certificates
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Build and install StarLet
         run: |
@@ -112,9 +126,14 @@ jobs:
   release:
     name: GitHub Release
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.tag, 'v')
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          path: src
+
       - uses: actions/download-artifact@v4
         with:
           pattern: deb-*
@@ -124,16 +143,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          ls -l *.deb
+          ident=$(sed -n 's/^#define[[:space:]]*__IDENT__[[:space:]]*"\(.*\)"/\1/p' src/src/t2r_main.c)
+          test -n "$ident"
+          for l in EN RU; do
+            cp "src/docs/UserGuide_$l.pdf" "mbusgw-t2r-$ident-UserGuide_$l.pdf"
+          done
+          ls -l *.deb *.pdf
           for deb in *.deb; do                  # The tag must be the package version
             case "$deb" in mbusgw-t2r_${TAG#v}-*) ;; *) echo "$deb does not match $TAG"; exit 1;; esac
           done
           sha256sum *.deb > SHA256SUMS
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" *.deb SHA256SUMS --clobber
+            gh release upload "$TAG" *.deb *.pdf SHA256SUMS --clobber
           else
-            gh release create "$TAG" *.deb SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
+            gh release create "$TAG" *.deb *.pdf SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
               "Packages for amd64 and arm64, tested on Debian 12, Debian 13 and Ubuntu 24.04 (any system with glibc >= 2.34 should do); the service is installed disabled: \`sudo systemctl enable --now mbusgw-t2r\`. Install: \`sudo apt install ./mbusgw-t2r_${TAG#v}-1_<arch>.deb\`."
           fi

@@ -22,6 +22,9 @@
 #
 #	28-OCT-2026	RRL	The sources tarball mbusgw-t2r-<IDENT>.tar.gz (git archive of the tag,
 #				the top directory mbusgw-t2r-<IDENT>/) is attached to the Release too.
+#
+#	28-OCT-2026	RRL	The actions run on Node.js 24 (Node.js 20 is deprecated): checkout@v5,
+#				upload-artifact@v6, download-artifact@v7.
 #--
 
 name: release
@@ -59,7 +62,7 @@ jobs:
           apt-get install --yes --no-install-recommends build-essential cmake pkg-config \
             libconfig-dev dpkg-dev file git ca-certificates
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -89,7 +92,7 @@ jobs:
             echo "libconfig is linked dynamically"; exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: deb-${{ matrix.arch }}
           path: build/*.deb
@@ -109,7 +112,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.distro }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: deb-${{ matrix.arch }}
 
@@ -132,12 +135,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.tag, 'v')
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
           path: src
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: deb-*
           merge-multiple: true

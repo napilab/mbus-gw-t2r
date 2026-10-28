@@ -6,10 +6,10 @@
 #   CREATION DATE: 28-OCT-2026
 #
 #	A push of the tag v<VERSION> (VERSION follows __REV__ of src/t2r_main.c, X.00-13ECO05 ->
-#	v0.13.5) builds the packages and attaches them and the User Guide PDFs to the Release of that
-#	tag. The manual run (Actions -> release -> Run workflow) with the <tag> input does the same for
-#	an existing tag (the files of its Release are replaced); without it - only builds and tests
-#	the packages of the branch, see the run's artifacts.
+#	v0.13.5) builds the packages and attaches them, the User Guide PDFs and the sources tarball
+#	to the Release of that tag. The manual run (Actions -> release -> Run workflow) with the <tag>
+#	input does the same for an existing tag (the files of its Release are replaced); without it -
+#	only builds and tests the packages of the branch, see the run's artifacts.
 #
 #	The packages are built on Debian 12 (bookworm): the binary needs glibc >= 2.34 only (bookworm,
 #	trixie, Ubuntu 22.04 and newer); libconfig and StarLet are linked statically.
@@ -19,6 +19,9 @@
 #
 #	28-OCT-2026	RRL	The User Guide PDFs are attached to the Release too (named as before:
 #				mbusgw-t2r-<IDENT>-UserGuide_EN.pdf); the manual run takes a <tag>.
+#
+#	28-OCT-2026	RRL	The sources tarball mbusgw-t2r-<IDENT>.tar.gz (git archive of the tag,
+#				the top directory mbusgw-t2r-<IDENT>/) is attached to the Release too.
 #--
 
 name: release
@@ -150,14 +153,16 @@ jobs:
           for l in EN RU; do
             cp "src/docs/UserGuide_$l.pdf" "mbusgw-t2r-$ident-UserGuide_$l.pdf"
           done
-          ls -l *.deb *.pdf
+          git -C src archive --format=tar.gz --prefix="mbusgw-t2r-$ident/" \
+            -o "$PWD/mbusgw-t2r-$ident.tar.gz" HEAD
+          ls -l *.deb *.pdf *.tar.gz
           for deb in *.deb; do                  # The tag must be the package version
             case "$deb" in mbusgw-t2r_${TAG#v}-*) ;; *) echo "$deb does not match $TAG"; exit 1;; esac
           done
-          sha256sum *.deb > SHA256SUMS
+          sha256sum *.deb *.tar.gz > SHA256SUMS
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" *.deb *.pdf SHA256SUMS --clobber
+            gh release upload "$TAG" *.deb *.pdf *.tar.gz SHA256SUMS --clobber
           else
-            gh release create "$TAG" *.deb *.pdf SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
+            gh release create "$TAG" *.deb *.pdf *.tar.gz SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
               "Packages for amd64 and arm64, tested on Debian 12, Debian 13 and Ubuntu 24.04 (any system with glibc >= 2.34 should do); the service is installed disabled: \`sudo systemctl enable --now mbusgw-t2r\`. Install: \`sudo apt install ./mbusgw-t2r_${TAG#v}-1_<arch>.deb\`."
           fi

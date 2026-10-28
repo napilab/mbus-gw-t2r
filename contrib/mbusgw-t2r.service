@@ -1,0 +1,23 @@
+#++
+#	FACILITY: A yet another gateway for MODBUS (TCP to RTU)
+#
+#	DESCRIPTION: The systemd unit of the gateway (the .deb package installs it disabled):
+#		$ sudo systemctl enable --now mbusgw-t2r
+#	The local changes (the settings file, TasksMax, ...) go to a drop-in, not here:
+#		$ sudo systemctl edit mbusgw-t2r
+#
+#	CREATION DATE: 28-OCT-2026
+#--
+[Unit]
+Description=MODBUS TCP to RTU gateway (mbusgw-t2r)
+Documentation=file:/opt/mbusgw-t2r/share/doc/mbusgw-t2r/README.md
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/mbusgw-t2r/sbin/mbusgw-t2r --settings=/opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

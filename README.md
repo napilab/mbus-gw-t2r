@@ -219,6 +219,24 @@ $ sudo make uninstall
 Everything which has been put by `make install` is removed, except the configuration files
 under `/opt/mbusgw-t2r/etc/` - the has been tuned working configuration always survives.
 
+####	Ready-made packages (GitHub Releases)
+
+Every release tag on GitHub (`v0.13.5` and later) gets `.deb` packages for amd64 and arm64 at
+https://github.com/napilab/mbus-gw-t2r/releases. They are built on Debian 12 and need glibc 2.34
+or newer only (tested on Debian 12, Debian 13 and Ubuntu 24.04); libconfig and StarLet are linked
+statically. The package puts the gateway to `/opt/mbusgw-t2r/` and the systemd unit
+`mbusgw-t2r.service`, which is installed **disabled** - tune the settings first:
+
+```
+$ sudo apt install ./mbusgw-t2r_0.13.5-1_arm64.deb
+$ sudo nano /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
+$ sudo systemctl enable --now mbusgw-t2r
+```
+
+The configuration files are conffiles: an upgrade keeps the tuned ones. The workflow is
+`.github/workflows/release.yml`; locally the same package is made by
+`cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON && make -s && cpack -G DEB`.
+
 ####	Automatic build (GitLab CI)
 
 The file `.gitlab-ci.yml` builds the gateway on every push to the GitLab repository. It does the

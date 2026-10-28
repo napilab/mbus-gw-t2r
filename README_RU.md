@@ -218,6 +218,24 @@ $ sudo make uninstall
 Удаляется всё, что поставил `make install`, кроме файлов конфигурации в `/opt/mbusgw-t2r/etc/` —
 настроенная рабочая конфигурация переживает деинсталляцию всегда.
 
+####	Готовые пакеты (GitHub Releases)
+
+К каждому релизному тегу на GitHub (`v0.13.5` и новее) прикладываются пакеты `.deb` для amd64 и
+arm64: https://github.com/napilab/mbus-gw-t2r/releases. Они собраны на Debian 12 и требуют только
+glibc 2.34 или новее (проверены на Debian 12, Debian 13 и Ubuntu 24.04); libconfig и StarLet
+слинкованы статически. Пакет ставит шлюз в `/opt/mbusgw-t2r/` и службу systemd
+`mbusgw-t2r.service` — она ставится **выключенной**: сначала настройте файл настроек:
+
+```
+$ sudo apt install ./mbusgw-t2r_0.13.5-1_arm64.deb
+$ sudo nano /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
+$ sudo systemctl enable --now mbusgw-t2r
+```
+
+Файлы настроек — conffiles: при обновлении настроенные сохраняются. Сборку делает
+`.github/workflows/release.yml`; локально тот же пакет собирается так:
+`cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON && make -s && cpack -G DEB`.
+
 ####	Автоматическая сборка (GitLab CI)
 
 Файл `.gitlab-ci.yml` собирает шлюз при каждом push в репозиторий на GitLab. Он делает те же шаги,

@@ -55,12 +55,20 @@
 #				libconfig9, trixie - libconfig11); -DT2R_STATIC_LIBCONFIG=OFF links the
 #				shared one as before.
 #
+#	28-OCT-2026	RRL	X.00-13ECO05: The .deb package by CPack (cpack -G DEB): the systemd unit
+#				contrib/mbusgw-t2r.service (installed disabled, T2R_SYSTEMD_UNIT), the
+#				configuration files are conffiles; built by .github/workflows/release.yml.
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
 #		$ make -s
 #		$ sudo make install
 #		$ sudo make uninstall
+#
+#	The .deb package (see .github/workflows/release.yml):
+#		$ cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON
+#		$ make -s && cpack -G DEB
 #--
 
 cmake_minimum_required (VERSION 3.10)
@@ -226,6 +234,7 @@ install (FILES
 	docs/UserGuide_EN.pdf
 	docs/UserGuide_RU.pdf
 	contrib/99-ftdi-latency.rules
+	contrib/mbusgw-t2r.service
 	DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
@@ -244,6 +253,14 @@ install (CODE "
 	endforeach ()
 ")
 
+#	The systemd unit goes to /usr/lib/systemd/system only for the package: 'make install' to /opt/
+#	does not touch the system directories.
+option(T2R_SYSTEMD_UNIT "Install the systemd unit (for the .deb package)" OFF)
+
+if (T2R_SYSTEMD_UNIT)
+	install (FILES contrib/mbusgw-t2r.service DESTINATION /usr/lib/systemd/system)
+endif ()
+
 #	'make uninstall': removes everything from install_manifest.txt; the configuration files
 #	which were kept (not overwritten) at the install time are not touched.
 add_custom_target (uninstall
@@ -259,3 +276,31 @@ add_custom_target(files_config SOURCES
 	README.md
 	BLOCKNOTE.md
 )
+
+
+#------------------------------------------------------------------------------------------------------
+#	The .deb package: 'cpack -G DEB' in the build directory. The configuration files are conffiles -
+#	dpkg keeps the has been tuned ones on an upgrade; the unit is installed disabled.
+#
+configure_file (cmake/deb/conffiles.in ${CMAKE_CURRENT_BINARY_DIR}/deb/conffiles @ONLY)
+
+set (CPACK_GENERATOR			"DEB")
+set (CPACK_PACKAGE_NAME			"${PROJECT_NAME}")
+set (CPACK_PACKAGE_VENDOR		"StarLet Squad")
+set (CPACK_PACKAGE_CONTACT		"Ruslan R. Laishev <zator@yandex.ru>")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY	"A yet another gateway for MODBUS (TCP to RTU)")
+set (CPACK_PACKAGING_INSTALL_PREFIX	"${CMAKE_INSTALL_PREFIX}")
+set (CPACK_DEBIAN_FILE_NAME		DEB-DEFAULT)		# <name>_<version>-<release>_<arch>.deb
+set (CPACK_DEBIAN_PACKAGE_RELEASE	1)
+set (CPACK_DEBIAN_PACKAGE_SECTION	"net")
+set (CPACK_DEBIAN_PACKAGE_HOMEPAGE	"https://github.com/napilab/mbus-gw-t2r")
+set (CPACK_DEBIAN_PACKAGE_SHLIBDEPS	ON)			# libc6 (>= ...) by dpkg-shlibdeps
+set (CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+	${CMAKE_CURRENT_BINARY_DIR}/deb/conffiles
+	${CMAKE_CURRENT_SOURCE_DIR}/cmake/deb/postinst
+	${CMAKE_CURRENT_SOURCE_DIR}/cmake/deb/prerm
+	${CMAKE_CURRENT_SOURCE_DIR}/cmake/deb/postrm
+)
+set (CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
+
+include (CPack)

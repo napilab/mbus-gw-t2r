@@ -1,0 +1,8 @@
+#!/bin/sh
+#	mbusgw-t2r: the service is stopped on a removal (an upgrade restarts it in postinst).
+set -e
+if [ "$1" = "remove" ] && [ -d /run/systemd/system ]; then
+	systemctl stop mbusgw-t2r.service || true
+	systemctl disable mbusgw-t2r.service || true
+fi
+exit 0

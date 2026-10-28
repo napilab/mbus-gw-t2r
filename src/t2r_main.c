@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13ECO04"
-#define	__REV__		"00.13.04"
+#define	__IDENT__	"X.00-13ECO05"
+#define	__REV__		"00.13.05"
 
 /*
 **++
@@ -152,6 +152,10 @@
 **	28-OCT-2026	RRL	X.00-13ECO04 / REV: 00.13.04 - The delivery change (no C source change):
 **				libconfig is linked statically, the package does not depend on a distro's
 **				libconfig.so.N anymore.
+**
+**	28-OCT-2026	RRL	X.00-13ECO05 / REV: 00.13.05 - The delivery change (no C source change):
+**				the .deb package (CPack, the systemd unit, conffiles), built for amd64 and
+**				arm64 by GitHub Actions and attached to the GitHub Release of the tag.
 **--
 */
 

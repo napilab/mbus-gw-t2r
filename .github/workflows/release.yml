@@ -1,0 +1,139 @@
+#++
+#   DESCRIPTION: The .deb packages of the gateway (amd64, arm64) for a GitHub Release
+#
+#   AUTHOR: Ruslan R. Laishev (BMF, The BadAss SysMan)
+#
+#   CREATION DATE: 28-OCT-2026
+#
+#	A push of the tag v<VERSION> (VERSION follows __REV__ of src/t2r_main.c, X.00-13ECO05 ->
+#	v0.13.5) builds the packages and attaches them to the Release of that tag; the manual run
+#	(Actions -> release -> Run workflow) only builds and tests them, see the run's artifacts.
+#
+#	The packages are built on Debian 12 (bookworm): the binary needs glibc >= 2.34 only (bookworm,
+#	trixie, Ubuntu 22.04 and newer); libconfig and StarLet are linked statically.
+#	Every package is installed and started on bookworm, trixie and noble before the release.
+#--
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  STARLET_REPO: "https://gitlab.com/SysMan-One/utility_routines.git"
+
+jobs:
+  deb:
+    name: build ${{ matrix.arch }}
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    container: debian:bookworm
+    steps:
+      - name: Install prerequisites
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends build-essential cmake pkg-config \
+            libconfig-dev dpkg-dev file git ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Build and install StarLet
+        run: |
+          git clone --depth 1 "$STARLET_REPO" /tmp/starlet
+          git -C /tmp/starlet log -1 --format='StarLet: %H %cd'
+          cmake -S /tmp/starlet -B /tmp/starlet/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/starlet/build -j "$(nproc)"
+          cmake --install /tmp/starlet/build
+
+      - name: Build the gateway and the package
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON
+          cmake --build build -j "$(nproc)"
+          cd build && cpack -G DEB
+
+      - name: Check the package
+        run: |
+          deb=$(ls build/*.deb)
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb"
+          case "$deb" in *_${{ matrix.arch }}.deb) ;; *) echo "Wrong architecture: $deb"; exit 1;; esac
+          file build/mbusgw-t2r
+          readelf -d build/mbusgw-t2r | grep NEEDED
+          if readelf -d build/mbusgw-t2r | grep -q 'libconfig'; then
+            echo "libconfig is linked dynamically"; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: build/*.deb
+          if-no-files-found: error
+
+  test:
+    name: test ${{ matrix.arch }} on ${{ matrix.distro }}
+    needs: deb
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        distro: ['debian:bookworm', 'debian:trixie', 'ubuntu:noble']
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.distro }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+
+      - name: Install, upgrade-in-place and start the gateway
+        run: |
+          apt-get update
+          apt-get install --yes ./*.deb
+          apt-get install --yes --reinstall ./*.deb
+          test -f /usr/lib/systemd/system/mbusgw-t2r.service
+          test -f /opt/mbusgw-t2r/etc/modbus-t2r_settings.conf
+          if ldd /opt/mbusgw-t2r/sbin/mbusgw-t2r | grep 'not found'; then exit 1; fi
+          out=$(/opt/mbusgw-t2r/sbin/mbusgw-t2r 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'REVISNF'
+          apt-get remove --yes mbusgw-t2r
+
+  release:
+    name: GitHub Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: deb-*
+          merge-multiple: true
+
+      - name: Attach the packages to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l *.deb
+          for deb in *.deb; do                  # The tag must be the package version
+            case "$deb" in mbusgw-t2r_${TAG#v}-*) ;; *) echo "$deb does not match $TAG"; exit 1;; esac
+          done
+          sha256sum *.deb > SHA256SUMS
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" *.deb SHA256SUMS --clobber
+          else
+            gh release create "$TAG" *.deb SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
+              "Packages for amd64 and arm64, tested on Debian 12, Debian 13 and Ubuntu 24.04 (any system with glibc >= 2.34 should do); the service is installed disabled: \`sudo systemctl enable --now mbusgw-t2r\`. Install: \`sudo apt install ./mbusgw-t2r_${TAG#v}-1_<arch>.deb\`."
+          fi

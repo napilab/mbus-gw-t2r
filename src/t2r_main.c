@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13ECO03"
-#define	__REV__		"00.13.03"
+#define	__IDENT__	"X.00-13ECO04"
+#define	__REV__		"00.13.04"
 
 /*
 **++
@@ -148,6 +148,10 @@
 **
 **	21-OCT-2026	RRL	X.00-13ECO03 / REV: 00.13.03 - Apache License 2.0 (LICENSE, NOTICE, SPDX tags);
 **				no code changes.
+**
+**	28-OCT-2026	RRL	X.00-13ECO04 / REV: 00.13.04 - The delivery change (no C source change):
+**				libconfig is linked statically, the package does not depend on a distro's
+**				libconfig.so.N anymore.
 **--
 */
 

@@ -50,6 +50,11 @@
 #	14-OCT-2026	RRL	X.00-12ECO03: The package has a version: project(... VERSION) is taken from
 #				__REV__ of src/t2r_main.c (REV 00.12.03 -> VERSION 0.12.3).
 #
+#	28-OCT-2026	RRL	X.00-13ECO04: libconfig is linked statically by default (T2R_STATIC_LIBCONFIG):
+#				one package runs on any distro, whatever its libconfig.so.N (noble has
+#				libconfig9, trixie - libconfig11); -DT2R_STATIC_LIBCONFIG=OFF links the
+#				shared one as before.
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
@@ -107,6 +112,27 @@ pkg_check_modules(LIBCONFIG REQUIRED libconfig)
 #   non-standard prefix (a musl sysroot, /opt/...) is not found at the link time.
 #
 link_directories(${LIBCONFIG_LIBRARY_DIRS})
+
+#
+#   libconfig is linked statically by default: the soname differs from distro to distro (libconfig9,
+#   libconfig11, ...), so a binary linked with the shared one runs only where it was built. The
+#   library has no dependencies beyond libc; LGPL-2.1 is satisfied by the open sources (see NOTICE).
+#
+option(T2R_STATIC_LIBCONFIG "Link libconfig statically" ON)
+
+if (T2R_STATIC_LIBCONFIG)
+	find_library(LIBCONFIG_STATIC_LIB NAMES libconfig.a HINTS ${LIBCONFIG_LIBRARY_DIRS} NO_CMAKE_SYSTEM_PATH)
+	if (NOT LIBCONFIG_STATIC_LIB)
+		find_library(LIBCONFIG_STATIC_LIB NAMES libconfig.a)
+	endif ()
+	if (NOT LIBCONFIG_STATIC_LIB)
+		message (FATAL_ERROR "libconfig.a is not found (install libconfig-dev) - or give -DT2R_STATIC_LIBCONFIG=OFF")
+	endif ()
+	set (T2R_LIBCONFIG_LINK ${LIBCONFIG_STATIC_LIB})
+else ()
+	set (T2R_LIBCONFIG_LINK ${LIBCONFIG_LIBRARIES})
+endif ()
+message (STATUS "libconfig: ${T2R_LIBCONFIG_LINK}")
 
 
 find_package(StarLet REQUIRED)						# The installed UTILITY$ROUTINES package,
@@ -169,7 +195,7 @@ set ( T2R_SOURCES                                               # TOOTOO Router
 
 
 add_executable ( ${T2R_TARGET} ${T2R_SOURCES})
-target_link_libraries( ${T2R_TARGET} StarLet::starlet pthread rt ${LIBCONFIG_LIBRARIES})
+target_link_libraries( ${T2R_TARGET} StarLet::starlet pthread rt ${T2R_LIBCONFIG_LINK})
 
 
 #------------------------------------------------------------------------------------------------------

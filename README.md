@@ -54,7 +54,7 @@ point. Both translate MODBUS TCP to RTU; the differences which matter in practic
     reading exercise, not a guessing one.
   - **The extras.** Several TCP ports per one line, several lines per one process, the
     built-in Time Stamp pseudo device, the RS-485 kernel direction control --- all in a
-    ~100 KB binary with libconfig as the only runtime dependency.
+    ~100 KB binary that needs nothing beyond libc.
 
 If mbusd already serves you well --- keep it. If you are squeezing the most out of a busy
 RS-485 line on a small box, or you are tired of guessing why a request failed --- this
@@ -76,8 +76,8 @@ the `errno` of a failed system call, the allowed range of a misconfigured parame
 is designed to be grepped by the code and to make the troubleshooting a reading exercise,
 not a guessing one --- see the User Guide, Chapter 7.
 
-**Small footprint.** A single process; the only runtime dependency beyond libc is libconfig.
-The binary is about 100 KB; the StarLet set is linked statically. There are no busy loops
+**Small footprint.** A single process; no runtime dependencies beyond libc. The binary is
+about 100 KB; the StarLet set and libconfig are linked statically. There are no busy loops
 anywhere: all the waiting is `poll()`-driven, so an idle gateway consumes practically zero
 CPU. One thread exists per *active* TCP session only and is released as soon as the client
 disconnects (no thread or memory leaks --- verified by the bundled test bench and by the
@@ -113,7 +113,7 @@ this code was written for you.
 ### 	Installation
 
 The gateway depends on two packages: **libconfig** (a settings file parser, is taken from the
-distro) and **StarLet** (the UTILITY$ROUTINES set, is installed from sources as a CMake package).
+distro; linked statically, `-DT2R_STATIC_LIBCONFIG=OFF` links the shared one) and **StarLet** (the UTILITY$ROUTINES set, is installed from sources as a CMake package).
 The whole sequence from a bare system to a running gateway is:
 
 ####	Step 1. Install the build prerequisites

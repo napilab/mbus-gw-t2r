@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-MAIN"
-#define	__IDENT__	"X.00-13ECO05"
-#define	__REV__		"00.13.05"
+#define	__IDENT__	"X.00-13ECO06"
+#define	__REV__		"00.13.06"
 
 /*
 **++
@@ -156,6 +156,11 @@
 **	28-OCT-2026	RRL	X.00-13ECO05 / REV: 00.13.05 - The delivery change (no C source change):
 **				the .deb package (CPack, the systemd unit, conffiles), built for amd64 and
 **				arm64 by GitHub Actions and attached to the GitHub Release of the tag.
+**
+**	28-OCT-2026	RRL	X.00-13ECO06 / REV: 00.13.06 - The packages for MIPS and OpenWrt: the .deb for
+**				mipsel and mips64el (a cross build on Debian 12), the OpenWrt feed openwrt/
+**				(.ipk for 24.10, .apk for 25.12; mips_24kc, mipsel_24kc, aarch64_cortex-a53,
+**				arm_cortex-a7, arm_cortex-a7_neon-vfpv4, x86_64), see T2R-TTY X.00-13ECO06.
 **--
 */
 

@@ -15,6 +15,11 @@
 #	trixie, Ubuntu 22.04 and newer); libconfig and StarLet are linked statically.
 #	Every package is installed and started on bookworm, trixie and noble before the release.
 #
+#	The .deb for mipsel and mips64el is a cross build on bookworm (Debian 13 has no MIPS); it is
+#	started under qemu-user (no MIPS image of Debian to install it into). The OpenWrt packages
+#	are built by the official SDK containers from the feed openwrt/: .ipk by 24.10, .apk by 25.12;
+#	those of x86_64 and mips_24kc are installed and started in the OpenWrt rootfs images.
+#
 #	MODIFICATION HISTORY:
 #
 #	28-OCT-2026	RRL	The User Guide PDFs are attached to the Release too (named as before:
@@ -25,6 +30,10 @@
 #
 #	28-OCT-2026	RRL	The actions run on Node.js 24 (Node.js 20 is deprecated): checkout@v5,
 #				upload-artifact@v6, download-artifact@v7.
+#
+#	28-OCT-2026	RRL	X.00-13ECO06: the .deb for mipsel and mips64el (cross), the OpenWrt
+#				.ipk/.apk for mips_24kc, mipsel_24kc, aarch64_cortex-a53, arm_cortex-a7,
+#				arm_cortex-a7_neon-vfpv4 and x86_64.
 #--
 
 name: release
@@ -129,9 +138,179 @@ jobs:
           echo "$out" | grep -q 'REVISNF'
           apt-get remove --yes mbusgw-t2r
 
+  deb-cross:
+    name: build ${{ matrix.arch }}
+    strategy:
+      matrix:
+        include:
+          - { arch: mipsel,   triplet: mipsel-linux-gnu,         qemu: qemu-mipsel }
+          - { arch: mips64el, triplet: mips64el-linux-gnuabi64,  qemu: qemu-mips64el }
+    runs-on: ubuntu-24.04
+    container: debian:bookworm
+    env:
+      ARCH: ${{ matrix.arch }}
+      TRIPLET: ${{ matrix.triplet }}
+    steps:
+      - name: Install prerequisites
+        run: |
+          dpkg --add-architecture "$ARCH"
+          apt-get update
+          apt-get install --yes --no-install-recommends build-essential cmake pkg-config \
+            dpkg-dev file git ca-certificates crossbuild-essential-$ARCH libconfig-dev:$ARCH qemu-user
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Build and install StarLet
+        run: |
+          git clone --depth 1 "$STARLET_REPO" /tmp/starlet
+          git -C /tmp/starlet log -1 --format='StarLet: %H %cd'
+          cmake -S /tmp/starlet -B /tmp/starlet/build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR="$ARCH" -DCMAKE_C_COMPILER="$TRIPLET-gcc" \
+            -DCMAKE_INSTALL_PREFIX=/opt/cross
+          cmake --build /tmp/starlet/build -j "$(nproc)"
+          cmake --install /tmp/starlet/build
+
+      - name: Build the gateway and the package
+        run: |
+          export PKG_CONFIG_LIBDIR="/usr/lib/$TRIPLET/pkgconfig:/usr/share/pkgconfig"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON \
+            -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR="$ARCH" -DCMAKE_C_COMPILER="$TRIPLET-gcc" \
+            -DCMAKE_PREFIX_PATH=/opt/cross -DT2R_DEB_ARCH="$ARCH"
+          grep -q '^HAVE_TIOCRS485:INTERNAL=1' build/CMakeCache.txt || { echo 'No RS-485 (TIOCSRS485)'; exit 1; }
+          cmake --build build -j "$(nproc)"
+          cd build && cpack -G DEB
+
+      - name: Check the package
+        run: |
+          deb=$(ls build/*.deb)
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb"
+          case "$deb" in *_${ARCH}.deb) ;; *) echo "Wrong architecture: $deb"; exit 1;; esac
+          file build/mbusgw-t2r
+          readelf -d build/mbusgw-t2r | grep NEEDED
+          if readelf -d build/mbusgw-t2r | grep -q 'libconfig'; then
+            echo "libconfig is linked dynamically"; exit 1
+          fi
+          out=$(${{ matrix.qemu }} -L / build/mbusgw-t2r 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'REVISNF'
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: deb-${{ matrix.arch }}
+          path: build/*.deb
+          if-no-files-found: error
+
+  openwrt:
+    name: openwrt ${{ matrix.arch }} ${{ matrix.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [mips_24kc, mipsel_24kc, aarch64_cortex-a53, arm_cortex-a7, arm_cortex-a7_neon-vfpv4, x86_64]
+        release: ['24.10', '25.12']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Build by the OpenWrt SDK
+        uses: openwrt/gh-action-sdk@v11
+        env:
+          ARCH: ${{ matrix.arch }}-openwrt-${{ matrix.release }}
+          FEEDNAME: mbusgw
+          PACKAGES: mbusgw-t2r
+          V: s
+
+      - name: Check the package
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir out
+          ls -l bin/packages/$ARCH/mbusgw/
+          for f in bin/packages/$ARCH/mbusgw/mbusgw-t2r*; do
+            case "$f" in
+              *.ipk)                            # tar.gz: debian-binary, control.tar.gz, data.tar.gz
+                cp "$f" out/
+                mkdir ipk && tar -xzf "$f" -C ipk && tar -xzf ipk/data.tar.gz -C ipk
+                tar -xzOf ipk/control.tar.gz ./control
+                find ipk -type f | sort
+                file ipk/usr/sbin/mbusgw-t2r
+                readelf -d ipk/usr/sbin/mbusgw-t2r | grep NEEDED
+                if readelf -d ipk/usr/sbin/mbusgw-t2r | grep -q 'libconfig'; then
+                  echo "libconfig is linked dynamically"; exit 1
+                fi ;;
+              *.apk)                            # mbusgw-t2r-0.13.6-r1.apk -> mbusgw-t2r_0.13.6-r1_<arch>.apk
+                v=${f##*/mbusgw-t2r-}; v=${v%.apk}
+                cp "$f" "out/mbusgw-t2r_${v}_${ARCH}.apk" ;;
+            esac
+          done
+          ls -l out
+          test -n "$(ls out)"
+          grep -rq -- '-DHAVE_TIOCRS485' logs/ || { echo 'No RS-485 (TIOCSRS485)'; exit 1; }
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: owrt-${{ matrix.arch }}-${{ matrix.release }}
+          path: out/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: logs-openwrt-${{ matrix.arch }}-${{ matrix.release }}
+          path: logs/
+          if-no-files-found: ignore
+
+  openwrt-test:
+    name: test openwrt ${{ matrix.arch }} ${{ matrix.release }}
+    needs: openwrt
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [mips_24kc, x86_64]
+        release: ['24.10', '25.12']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: owrt-${{ matrix.arch }}-${{ matrix.release }}
+          path: pkg
+
+      - name: qemu-user for MIPS
+        if: matrix.arch == 'mips_24kc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes qemu-user-static
+          ls /proc/sys/fs/binfmt_misc/ | grep qemu-mips
+
+      - name: Install, start and remove the gateway
+        run: |
+          cat > pkg/test.sh <<'EOF'
+          set -ex
+          mkdir -p /var/lock /var/run
+          if ls /pkg/*.ipk > /dev/null 2>&1; then           # No feed update: no dependencies
+            opkg install /pkg/*.ipk
+            opkg install --force-reinstall /pkg/*.ipk
+          else
+            apk add --allow-untrusted /pkg/*.apk
+          fi
+          test -x /usr/sbin/mbusgw-t2r
+          test -x /etc/init.d/mbusgw-t2r
+          test -f /etc/config/mbusgw-t2r
+          test -f /etc/mbusgw-t2r/modbus-t2r_settings.conf
+          out=$(/usr/sbin/mbusgw-t2r 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'REVISNF'
+          if ls /pkg/*.ipk > /dev/null 2>&1; then opkg remove mbusgw-t2r; else apk del mbusgw-t2r; fi
+          EOF
+          docker run --rm --platform linux/${{ matrix.arch }} -v "$PWD/pkg:/pkg" openwrt/rootfs:${{ matrix.arch }}-openwrt-${{ matrix.release }} /bin/sh /pkg/test.sh
+
   release:
     name: GitHub Release
-    needs: test
+    needs: [test, deb-cross, openwrt-test]
     if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.tag, 'v')
     runs-on: ubuntu-24.04
     steps:
@@ -142,7 +321,7 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          pattern: deb-*
+          pattern: '{deb,owrt}-*'
           merge-multiple: true
 
       - name: Attach the packages to the Release
@@ -158,14 +337,17 @@ jobs:
           done
           git -C src archive --format=tar.gz --prefix="mbusgw-t2r-$ident/" \
             -o "$PWD/mbusgw-t2r-$ident.tar.gz" HEAD
-          ls -l *.deb *.pdf *.tar.gz
-          for deb in *.deb; do                  # The tag must be the package version
-            case "$deb" in mbusgw-t2r_${TAG#v}-*) ;; *) echo "$deb does not match $TAG"; exit 1;; esac
+          ls -l *.deb *.ipk *.apk *.pdf *.tar.gz
+          for pkg in *.deb *.ipk *.apk; do      # The tag must be the package version
+            case "$pkg" in mbusgw-t2r_${TAG#v}-*) ;; *) echo "$pkg does not match $TAG"; exit 1;; esac
           done
-          sha256sum *.deb *.tar.gz > SHA256SUMS
+          sha256sum *.deb *.ipk *.apk *.tar.gz > SHA256SUMS
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" *.deb *.pdf *.tar.gz SHA256SUMS --clobber
+            gh release upload "$TAG" *.deb *.ipk *.apk *.pdf *.tar.gz SHA256SUMS --clobber
           else
-            gh release create "$TAG" *.deb *.pdf *.tar.gz SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes \
-              "Packages for amd64 and arm64, tested on Debian 12, Debian 13 and Ubuntu 24.04 (any system with glibc >= 2.34 should do); the service is installed disabled: \`sudo systemctl enable --now mbusgw-t2r\`. Install: \`sudo apt install ./mbusgw-t2r_${TAG#v}-1_<arch>.deb\`."
+            gh release create "$TAG" *.deb *.ipk *.apk *.pdf *.tar.gz SHA256SUMS --title "mbusgw-t2r ${TAG#v}" --notes-file - <<EOF
+          The .deb for amd64 and arm64 is tested on Debian 12, Debian 13 and Ubuntu 24.04 (any system with glibc >= 2.34 should do); for mipsel and mips64el it is built for Debian 12. The service is installed disabled: \`sudo systemctl enable --now mbusgw-t2r\`. Install: \`sudo apt install ./mbusgw-t2r_${TAG#v}-1_<arch>.deb\`.
+
+          OpenWrt: the .ipk is for 24.10 (\`opkg install ./mbusgw-t2r_${TAG#v}-*_<arch>.ipk\`), the .apk is for 25.12 (\`apk add --allow-untrusted ./mbusgw-t2r_${TAG#v}-*_<arch>.apk\`); libconfig and StarLet are linked statically, no network is needed for the install. The service is installed disabled: \`uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r && /etc/init.d/mbusgw-t2r start\`.
+          EOF
           fi

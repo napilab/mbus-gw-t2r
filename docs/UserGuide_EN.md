@@ -151,6 +151,31 @@ $ mbpoll -a 1 -r 1 -c 3 -1 127.0.0.1 -p 502
 
 If numbers come back --- everything works, end to end.
 
+### 4.2. On OpenWrt
+
+On an OpenWrt router install the package for your board from the Releases page (the
+architecture is the `DISTRIB_ARCH` line of `/etc/openwrt_release`): `.ipk` for OpenWrt 24.10,
+`.apk` for OpenWrt 25.12. The package needs nothing else, the router needs no network:
+
+```
+# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk
+# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk
+```
+
+The files are at other places than on Debian: the program is `/usr/sbin/mbusgw-t2r`, the
+settings file is `/etc/mbusgw-t2r/modbus-t2r_settings.conf`. The service is switched off after the
+install. Tune the settings file, then switch the service on and start it:
+
+```
+# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r
+# /etc/init.d/mbusgw-t2r start
+# logread -e mbusgw-t2r
+```
+
+The last command shows the messages of the gateway (they go to the system log). The USB
+serial adapter needs its kernel module: `kmod-usb-serial-ftdi`, `kmod-usb-serial-ch341` or
+`kmod-usb-serial-cp210x`, by the chip of the adapter.
+
 ## 5. Reading the log
 
 Every important event is printed as a line with a **message code**:

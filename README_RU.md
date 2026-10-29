@@ -236,6 +236,41 @@ $ sudo systemctl enable --now mbusgw-t2r
 `.github/workflows/release.yml`; локально тот же пакет собирается так:
 `cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON && make -s && cpack -G DEB`.
 
+Пакеты `.deb` для **mipsel** и **mips64el** (`v0.13.6` и новее) — кросс-сборка для Debian 12
+(в Debian 13 портов MIPS нет); ставятся так же.
+
+####	Пакеты для OpenWrt (GitHub Releases)
+
+Начиная с `v0.13.6` в релизе есть и пакеты OpenWrt для `mips_24kc` (ath79 и другие MIPS-платы
+big-endian), `mipsel_24kc` (ramips: MT7621, MT7628/MT7688), `aarch64_cortex-a53`,
+`arm_cortex-a7`, `arm_cortex-a7_neon-vfpv4` (ipq40xx, sunxi) и `x86_64`: `.ipk` для OpenWrt 24.10
+и `.apk` для OpenWrt 25.12. Архитектура пакетов вашей платы — строка `DISTRIB_ARCH` в
+`/etc/openwrt_release`. libconfig и StarLet слинкованы статически: у пакета нет зависимостей,
+сеть роутеру для установки не нужна:
+
+```
+# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk			# OpenWrt 24.10
+# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk	# OpenWrt 25.12
+```
+
+Пакет ставит шлюз в `/usr/sbin/mbusgw-t2r`, настройки — в `/etc/mbusgw-t2r/`, службу procd —
+`/etc/init.d/mbusgw-t2r`. Служба **выключена**, пока вы не настроите файл настроек и не включите
+её; её сообщения идут в системный журнал:
+
+```
+# vi /etc/mbusgw-t2r/modbus-t2r_settings.conf
+# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r
+# /etc/init.d/mbusgw-t2r start
+# logread -e mbusgw-t2r
+```
+
+Пакеты собирает официальный OpenWrt SDK из фида `openwrt/` этого репозитория (`mbusgw-t2r` и
+вспомогательные `starlet` и `libconfig-static`, только для сборки); пакеты `x86_64` и `mips_24kc` перед релизом
+ставятся и запускаются в образах OpenWrt. Собрать своим SDK:
+`echo "src-link mbusgw <это дерево>/openwrt" >> feeds.conf`,
+`./scripts/feeds update mbusgw && ./scripts/feeds install mbusgw-t2r`,
+`make package/mbusgw-t2r/compile`.
+
 ####	Автоматическая сборка (GitLab CI)
 
 Файл `.gitlab-ci.yml` собирает шлюз при каждом push в репозиторий на GitLab. Он делает те же шаги,

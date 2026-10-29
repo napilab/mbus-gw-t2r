@@ -150,6 +150,31 @@ $ mbpoll -a 1 -r 1 -c 3 -1 127.0.0.1 -p 502
 
 Если вернулись числа --- всё работает, из конца в конец.
 
+### 4.2. На OpenWrt
+
+На роутер с OpenWrt ставьте пакет для своей платы со страницы Releases (архитектура — строка
+`DISTRIB_ARCH` в `/etc/openwrt_release`): `.ipk` для OpenWrt 24.10, `.apk` для OpenWrt 25.12.
+Пакету больше ничего не нужно, сеть роутеру не нужна:
+
+```
+# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk
+# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk
+```
+
+Файлы лежат не там, где на Debian: программа — `/usr/sbin/mbusgw-t2r`, файл настроек —
+`/etc/mbusgw-t2r/modbus-t2r_settings.conf`. После установки служба выключена. Настройте файл
+настроек, затем включите службу и запустите её:
+
+```
+# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r
+# /etc/init.d/mbusgw-t2r start
+# logread -e mbusgw-t2r
+```
+
+Последняя команда показывает сообщения шлюза (они идут в системный журнал). Адаптеру USB-serial
+нужен модуль ядра: `kmod-usb-serial-ftdi`, `kmod-usb-serial-ch341` или `kmod-usb-serial-cp210x` —
+по микросхеме адаптера.
+
 ## 5. Как читать журнал
 
 Каждое важное событие печатается строкой с **кодом сообщения**:

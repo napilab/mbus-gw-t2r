@@ -237,6 +237,41 @@ The configuration files are conffiles: an upgrade keeps the tuned ones. The work
 `.github/workflows/release.yml`; locally the same package is made by
 `cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON && make -s && cpack -G DEB`.
 
+The `.deb` for **mipsel** and **mips64el** (`v0.13.6` and later) is a cross build for Debian 12
+(Debian 13 has no MIPS ports); it is installed the same way.
+
+####	OpenWrt packages (GitHub Releases)
+
+From `v0.13.6` on, a release also has OpenWrt packages for `mips_24kc` (ath79 and the other
+big-endian MIPS boards), `mipsel_24kc` (ramips: MT7621, MT7628/MT7688), `aarch64_cortex-a53`,
+`arm_cortex-a7`, `arm_cortex-a7_neon-vfpv4` (ipq40xx, sunxi) and `x86_64`: an `.ipk` for
+OpenWrt 24.10 and an `.apk` for OpenWrt 25.12. Your board's package architecture is the
+`DISTRIB_ARCH` line of `/etc/openwrt_release`. libconfig and StarLet are linked statically: the
+package has no dependencies, the router needs no network for the install:
+
+```
+# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk			# OpenWrt 24.10
+# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk	# OpenWrt 25.12
+```
+
+The package puts the gateway to `/usr/sbin/mbusgw-t2r`, the configuration to `/etc/mbusgw-t2r/`
+and the procd service `/etc/init.d/mbusgw-t2r`. The service is **disabled** until you tune the
+settings and switch it on; its messages go to the system log:
+
+```
+# vi /etc/mbusgw-t2r/modbus-t2r_settings.conf
+# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r
+# /etc/init.d/mbusgw-t2r start
+# logread -e mbusgw-t2r
+```
+
+The packages are built by the official OpenWrt SDK from the feed `openwrt/` of this repository
+(`mbusgw-t2r` and the build-only `starlet` and `libconfig-static`); the packages of `x86_64` and `mips_24kc` are installed
+and started in the OpenWrt images before the release. To build them by your own SDK:
+`echo "src-link mbusgw <this tree>/openwrt" >> feeds.conf`,
+`./scripts/feeds update mbusgw && ./scripts/feeds install mbusgw-t2r`,
+`make package/mbusgw-t2r/compile`.
+
 ####	Automatic build (GitLab CI)
 
 The file `.gitlab-ci.yml` builds the gateway on every push to the GitLab repository. It does the

@@ -32,6 +32,8 @@
 #	28-OCT-2026	RRL	X.00-13ECO04: the version follows the release (libconfig is linked statically).
 #
 #	28-OCT-2026	RRL	X.00-13ECO05: the version follows the release (the .deb packages).
+#
+#	28-OCT-2026	RRL	X.00-13ECO06: 4.2 On OpenWrt (the .ipk/.apk packages, the procd service).
 #--
 import sys
 
@@ -62,7 +64,7 @@ pdfmetrics.registerFont(TTFont('MonoB',   FDIR + 'DejaVuSansMono-Bold.ttf'))
 PAGE_W, PAGE_H = A4
 LM, RM, TM, BM = 25*mm, 22*mm, 22*mm, 22*mm
 
-VERSION   = 'X.00-13ECO05'
+VERSION   = 'X.00-13ECO06'
 PUBDATE_EN = 'October 2026'
 PUBDATE_RU = 'Октябрь 2026'
 ORG       = 'NaPi World & StarLet Squad collaboration'
@@ -570,7 +572,26 @@ def s_pack_en ():
 		   '(<font face="Mono">sudo apt install mbpoll</font>). Read 3 holding registers from '
 		   'the device with the slave address 1:'),
 		 C('$ mbpoll -a 1 -r 1 -c 3 -1 127.0.0.1 -p 502'),
-		 P('If the numbers come back --- everything works, end to end.')],
+		 P('If the numbers come back --- everything works, end to end.'),
+		 H2('4.2.  On OpenWrt'),
+		 P('On an OpenWrt router install the package for your board from the Releases page (the '
+		   'architecture is the <font face="Mono">DISTRIB_ARCH</font> line of '
+		   '<font face="Mono">/etc/openwrt_release</font>): <font face="Mono">.ipk</font> for OpenWrt '
+		   '24.10, <font face="Mono">.apk</font> for OpenWrt 25.12. The package needs nothing else, the '
+		   'router needs no network:'),
+		 C('# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk\n'
+		   '# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk'),
+		 P('The files are at other places than on Debian: the program is '
+		   '<font face="Mono">/usr/sbin/mbusgw-t2r</font>, the settings file is '
+		   '<font face="Mono">/etc/mbusgw-t2r/modbus-t2r_settings.conf</font>. The service is switched '
+		   'off after the install. Tune the settings file, then switch the service on and start it:'),
+		 C('# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r\n'
+		   '# /etc/init.d/mbusgw-t2r start\n'
+		   '# logread -e mbusgw-t2r'),
+		 P('The last command shows the messages of the gateway (they go to the system log). The USB '
+		   'serial adapter needs its kernel module: <font face="Mono">kmod-usb-serial-ftdi</font>, '
+		   '<font face="Mono">kmod-usb-serial-ch341</font> or <font face="Mono">kmod-usb-serial-cp210x</font>, '
+		   'by the chip of the adapter.')],
 		# --- Chapter 5 ---
 		[H1('Chapter 5.  The Time Stamp Pseudo Device'),
 		 P('The gateway can answer <i>by itself</i> --- without touching the line --- to a read '
@@ -940,7 +961,24 @@ def s_pack_ru ():
 		   '(<font face="Mono">sudo apt install mbpoll</font>). Читаем 3 регистра хранения с '
 		   'устройства с адресом 1:'),
 		 C('$ mbpoll -a 1 -r 1 -c 3 -1 127.0.0.1 -p 502'),
-		 P('Если вернулись числа — всё работает, из конца в конец.')],
+		 P('Если вернулись числа — всё работает, из конца в конец.'),
+		 H2('4.2.  На OpenWrt'),
+		 P('На роутер с OpenWrt ставьте пакет для своей платы со страницы Releases (архитектура — '
+		   'строка <font face="Mono">DISTRIB_ARCH</font> в <font face="Mono">/etc/openwrt_release</font>): '
+		   '<font face="Mono">.ipk</font> для OpenWrt 24.10, <font face="Mono">.apk</font> для OpenWrt 25.12. '
+		   'Пакету больше ничего не нужно, сеть роутеру не нужна.'),
+		 C('# opkg install ./mbusgw-t2r_0.13.6-*_mipsel_24kc.ipk\n'
+		   '# apk add --allow-untrusted ./mbusgw-t2r_0.13.6-*_mipsel_24kc.apk'),
+		 P('Файлы лежат не там, где на Debian: программа — <font face="Mono">/usr/sbin/mbusgw-t2r</font>, '
+		   'файл настроек — <font face="Mono">/etc/mbusgw-t2r/modbus-t2r_settings.conf</font>. После '
+		   'установки служба выключена. Настройте файл настроек, затем включите службу и запустите её:'),
+		 C('# uci set mbusgw-t2r.main.enabled=1 && uci commit mbusgw-t2r\n'
+		   '# /etc/init.d/mbusgw-t2r start\n'
+		   '# logread -e mbusgw-t2r'),
+		 P('Последняя команда показывает сообщения шлюза (они идут в системный журнал). Адаптеру '
+		   'USB-serial нужен модуль ядра: <font face="Mono">kmod-usb-serial-ftdi</font>, '
+		   '<font face="Mono">kmod-usb-serial-ch341</font> или <font face="Mono">kmod-usb-serial-cp210x</font> — '
+		   'по микросхеме адаптера.')],
 		[H1('Глава 5.  Псевдоустройство меток времени'),
 		 P('Шлюз умеет отвечать <i>сам</i> — не трогая линию — на запрос чтения, посланный на '
 		   'специальный адрес ведомого. Ответ — текущее время машины, на которой работает шлюз. '

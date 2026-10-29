@@ -59,6 +59,10 @@
 #				contrib/mbusgw-t2r.service (installed disabled, T2R_SYSTEMD_UNIT), the
 #				configuration files are conffiles; built by .github/workflows/release.yml.
 #
+#	28-OCT-2026	RRL	X.00-13ECO06: The .deb of a cross build: T2R_DEB_ARCH names the Debian
+#				architecture of the package (mipsel, mips64el) - CPack takes the one of
+#				the build host otherwise. The OpenWrt packages are built from openwrt/.
+#
 #	USAGE (see README.md for the whole installation sequence):
 #		$ mkdir ./build && cd ./build
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release
@@ -69,6 +73,8 @@
 #	The .deb package (see .github/workflows/release.yml):
 #		$ cmake ../ -DCMAKE_BUILD_TYPE=Release -DT2R_SYSTEMD_UNIT=ON
 #		$ make -s && cpack -G DEB
+#
+#	The OpenWrt packages (.ipk, .apk): the feed openwrt/, see README.md.
 #--
 
 cmake_minimum_required (VERSION 3.10)
@@ -302,5 +308,12 @@ set (CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_SOURCE_DIR}/cmake/deb/postrm
 )
 set (CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
+
+#	A cross build names the architecture of the package: dpkg of the build host would give its own
+set (T2R_DEB_ARCH "" CACHE STRING "The Debian architecture of the .deb of a cross build (mipsel, mips64el)")
+
+if (T2R_DEB_ARCH)
+	set (CPACK_DEBIAN_PACKAGE_ARCHITECTURE "${T2R_DEB_ARCH}")
+endif ()
 
 include (CPack)

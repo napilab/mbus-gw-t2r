@@ -1,6 +1,6 @@
 #define	__MODULE__	"T2R-TTY"
-#define	__IDENT__	"X.00-13ECO01"
-#define	__REV__		"00.13.01"
+#define	__IDENT__	"X.00-13ECO06"
+#define	__REV__		"00.13.06"
 
 /*
 **++
@@ -67,6 +67,13 @@
 **				DEVCLSERR. s_tty_tx_drain() replaces tcdrain(): TIOCOUTQ is polled up to the
 **				frame air time plus the answer timeout (TXDRAINTMO, the output is flushed);
 **				s_tty_open(): CRTSCTS is cleared explicitly (was inherited from the port).
+**
+**	28-OCT-2026	RRL	X.00-13ECO06 / REV: 00.13.06 - s_put_be16() stores the registers byte by byte:
+**				the values of the answer PDU start at an odd offset (slave, fncode, bc), the
+**				16 bits store there traps on MIPS (an unaligned access, fixed up by the kernel
+**				at best) - the time stamp pseudo device on the OpenWrt/MIPS boards. The
+**				seconds are shifted as int64_t: time_t of a 32 bits glibc (mipsel, armhf)
+**				is 32 bits, a shift by 48 was undefined - R0, R1 got garbage.
 **--
 */
 #include	<time.h>
@@ -997,14 +1004,15 @@ MODBUS_EXC_T	*l_resp_pdu = (MODBUS_EXC_T *) l_resp_dsc->data;
  *   RETURNS:
  *	An address of the next position in the output buffer
  */
-static inline uint16_t * s_put_be16 (
-		uint16_t	*a_buf,
+static inline uint8_t * s_put_be16 (
+		uint8_t		*a_buf,
 		uint16_t	a_word16
 		)
 {
-	*(a_buf) = htons(a_word16);
+	a_buf[0] = (uint8_t) (a_word16 >> 8);					/* Byte by byte: <a_buf> is at an odd */
+	a_buf[1] = (uint8_t) a_word16;						/* offset, MIPS traps a 16 bits store there */
 
-	return	(a_buf + 1);
+	return	(a_buf + 2);
 }
 
 
@@ -1036,7 +1044,7 @@ MODBUS_RESP_T	*l_resp_pdu;
 int	l_nr_regs;
 struct timespec l_now;
 struct tm l_tm = {0};
-uint16_t	*l_valptr;
+uint8_t		*l_valptr;
 
 	l_req_pdu = (MODBUS_REQ_T *) l_req_dsc->data;
 	l_resp_pdu = (MODBUS_RESP_T *) l_resp_dsc->data;
@@ -1052,7 +1060,7 @@ uint16_t	*l_valptr;
 	l_resp_pdu->fncode = l_req_pdu->fncode;
 	l_resp_pdu->bc = 0;
 
-	l_valptr = l_resp_pdu->val;							/* Set <l_valptr> to PDU's data part */
+	l_valptr = (uint8_t *) l_resp_pdu->val;							/* Set <l_valptr> to PDU's data part */
 
 
 	clock_gettime(CLOCK_REALTIME_COARSE, &l_now);
@@ -1063,10 +1071,10 @@ uint16_t	*l_valptr;
 		 * A 64 bits count of seconds is packed into 4x16 bits registers, the most significant
 		 * word goes first: R0 = bits 63..48, R1 = 47..32, R2 = 31..16, R3 = 15..0
 		 */
-		l_valptr = s_put_be16(l_valptr, (uint16_t) (l_now.tv_sec >> 48));	/* R0 */
-		l_valptr = s_put_be16(l_valptr, (uint16_t) (l_now.tv_sec >> 32));	/* R1 */
-		l_valptr = s_put_be16(l_valptr, (uint16_t) (l_now.tv_sec >> 16));	/* R2 */
-		l_valptr = s_put_be16(l_valptr, (uint16_t) (l_now.tv_sec));		/* R3 */
+		l_valptr = s_put_be16(l_valptr, (uint16_t) ((int64_t) l_now.tv_sec >> 48));	/* R0 */
+		l_valptr = s_put_be16(l_valptr, (uint16_t) ((int64_t) l_now.tv_sec >> 32));	/* R1 */
+		l_valptr = s_put_be16(l_valptr, (uint16_t) ((int64_t) l_now.tv_sec >> 16));	/* R2 */
+		l_valptr = s_put_be16(l_valptr, (uint16_t) ((int64_t) l_now.tv_sec));		/* R3 */
 
 		l_resp_dsc->len += (4 * 2);						/* Adjust size of data to 4xbe16 */
 		l_resp_pdu->bc += (4 * 2);

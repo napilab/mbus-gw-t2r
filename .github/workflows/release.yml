@@ -34,6 +34,9 @@
 #	28-OCT-2026	RRL	X.00-13ECO06: the .deb for mipsel and mips64el (cross), the OpenWrt
 #				.ipk/.apk for mips_24kc, mipsel_24kc, aarch64_cortex-a53, arm_cortex-a7,
 #				arm_cortex-a7_neon-vfpv4 and x86_64.
+#
+#	29-OCT-2026	RRL	The OpenWrt build with V=sc: with V=s the SDK runs make of CMake with no
+#				VERBOSE=1, the compile lines (-DHAVE_TIOCRS485) are not in the logs.
 #--
 
 name: release
@@ -222,7 +225,7 @@ jobs:
           ARCH: ${{ matrix.arch }}-openwrt-${{ matrix.release }}
           FEEDNAME: mbusgw
           PACKAGES: mbusgw-t2r
-          V: s
+          V: sc                               # 'c': VERBOSE=1 of CMake, the compile lines are in logs/
 
       - name: Check the package
         env:
